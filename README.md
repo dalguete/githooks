@@ -11,6 +11,10 @@ other place works too, as long as that is inside the repo.
 For convenience, **$PATH** in your local should be adapted to enable access the
 exec files (bin), here delivered.
 
+Run `githooks --init`, and enjoy.
+
+See below for more command options.
+
 # GENERATED STRUCTURE
 By default git only handles one hook file per repo. With this solution, you'll
 be able to add any amount of hook files, that will be called sequentially.
