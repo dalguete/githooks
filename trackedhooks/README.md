@@ -20,5 +20,5 @@ trackedhooks/
 </strong></pre>
 
 Only the **scripts** directly below the container hook folder will be executed,
-however you can have as many folder internally as your script requires
+however you can any folder structure inside containers, as your scripts require.
 
