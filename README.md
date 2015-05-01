@@ -4,7 +4,7 @@ chaining support and load of versioned hook files inside the repo. Your defined
 hooks will be preserved, but will live in a more appropriate place.
 
 # INSTALL (it's quick)
-Clone this repo and store it in a folder named **.githooks** *(note the dot at the beggining)*
+Clone this repo and store it in a folder named **.githooks** *(dot at the beggining)*
 next to *.git* folder, so *code* and *trackedhooks* can travel with your repo. Any
 other place works too, as long as that is inside the repo.
 
