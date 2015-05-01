@@ -5,7 +5,6 @@ hooks will be preserved, but will live in a more adequate place.
 
 
 # GENERATED STRUCTURE
--------------------
 By default git only handles one hook file per repo. With this solution, you'll
 be able to add any amount of hook files, that will be called sequentially.
 
@@ -52,8 +51,6 @@ This script can be used to create and handle this structure, so you only worry
 about creating the hook process you want.
 
 # HOW TO USE THIS SCRIPT
-----------------------
-
 You can perform several operations, as detailed below:
 
 * **`--status/-s [<hook-name> <file-name>] [-t]` (default)**. General status info with all
