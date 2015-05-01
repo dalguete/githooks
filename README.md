@@ -11,17 +11,19 @@ be able to add any amount of hook files, that will be called sequentially.
 
 And this is the new structure:
 
+```
 .git/hooks/
  │
- ├── *hook files*
- ├── *hook names folder.d/*
- │    ├── file
+ ├── hook files
+ ├── hook names folder.d/
+ │    ├── script
  │    └── ...
- ├── *trackedhooks/*
- │    └── *hook names folder*.d/
- │        ├── file
+ ├── trackedhooks/
+ │    └── hook names folder.d/
+ │        ├── script
  │        └── ...
- └── *_.sh*
+ └── _.sh
+```
 
 Can look a bit intimidating, but actually it's really simple.
 
@@ -54,25 +56,25 @@ about creating the hook process you want.
 
 You can perform several operations, as detailed below:
 
-* **--status/-s [<hook-name> <file-name>] [-t] (default)**. General status info with all
+* **`--status/-s [<hook-name> <file-name>] [-t]` (default)**. General status info with all
 active hooks and paths to their files. If no options defined, it will print
 all hooks info, otherwise only those ones that make a match. '-t' means look
 only in trackedhooks/ folder. The status report also includes info about
 current structure.
 
-* **--init**. Creates the basic structure, as defined above. The next is performed:
+* **`--init`**. Creates the basic structure, as defined above. The next is performed:
 
   * Remove+Add the _.sh script.
   * Remove+Add the linked trackedhooks/ folder.
   * Transform all active hook files into the new chaining version.
 
-* **--destroy**. Reverts the creation of the new structure, New files and folders will
+* **`--destroy`**. Reverts the creation of the new structure, New files and folders will
 be removed. Active hooks will be kept as active, but in case more than one file
 has been detected, only the '00default' will be used. Other files will be left
 their respective folders, ones won't be removed to preserve your data.
 trackedhooks/ folder and _.sh script will be removed.
 
-* **--add/-a <hook-name> <file-name> [-t] [--do-edit]**. Creates a new hook file, given
+* **`--add/-a <hook-name> <file-name> [-t] [--do-edit]`**. Creates a new hook file, given
 the hook type and the file name. On collision, it will ask before proceed. The
 option '-t' means create it in the trackedhooks/ folder, whenever possible.
 When no options given, the command will respond with an error and possible
@@ -80,12 +82,12 @@ options.
 On success, the route to the new file will be printed and your favorite editor
 opened, if the option '--do-edit' is set too
 
-* **--edit/-e <hook-name> <file-name> [-t]**. Let you edit a given hook file, given the
+* **`--edit/-e <hook-name> <file-name> [-t]`**. Let you edit a given hook file, given the
 hook type and the file name. It uses the favorite editor set. The option '-t'
 means search in the trackedhooks/ folder, whenever possible. When no options
 given, the command will respond with an error and possible options.
 
-* **--delete/-d <hook-name> <file-name> [-t]**. Delete a given hook file, given the
+* **`--delete/-d <hook-name> <file-name> [-t]`**. Delete a given hook file, given the
 hook type and the file name. The option '-t' means search in the trackedhooks/
 folder, whenever possible. When no options given, the command will respond with
 an error and possible options.
