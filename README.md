@@ -11,7 +11,7 @@ be able to add any amount of hook files, that will be called sequentially.
 
 And this is the new structure:
 
-```
+<pre><strong>
 .git/hooks/
  │
  ├── hook files
@@ -23,7 +23,7 @@ And this is the new structure:
  │        ├── script
  │        └── ...
  └── _.sh
-```
+</strong></pre>
 
 Can look a bit intimidating, but actually it's really simple.
 
