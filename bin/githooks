@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Modify the Git Hooks structure, to enable chain calls and external/tracked hook files
 # Author: Daniel Dalgo <dalguete@gmail.com>
@@ -32,141 +32,259 @@
 
 set -eu
 
-# Main vars
+# TODO: Add suggestions for commands like edit add, etc
+# TODO: Add -y flag
+
+# Main vars, to be used only inside this script.
+# Explicitly set to prevent overrides from calling env.
 MAIN_FUNCTION=
-ARGS=()
-# TODO: Change the approach on flag options, to prevent an explosion
-#       when more of these appear.
-DO_EDIT=
-FROM_TRACKEDHOOKS_FOLDER=
+declare -a ARGS=()
+declare -A FLAGS=()
 
-# Name of the trackedhooks/ folder
-TRACKEDHOOKS_FOLDER_NAME='trackedhooks'
+# Config vars, overrides are permitted.
+# That's the reason of the parameter expansion.
+# See that nice colon at the beginning, this is the reason http://stackoverflow.com/a/4892546
+: ${TRACKEDHOOKS_FOLDERNAME:="trackedhooks"}
+: ${TRIGGERSCRIPT_FILENAME:="_.sh"}
+: ${DEFAULT_EXTENSION:="00default"}
 
+# Some fancy stuff for coloring messages
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Basic git check.
 if [ -z `which git` ]; then
   echo -e >&2 \
-  "Git is not installed. Can't continue."
+"..."\
+"${RED}Git is not installed. Can't continue.${NC}"
 
   exit 1
 fi
 
-# TODO: use 'local' in fucntion names
-
 # Function used to print the usage message
 print_usage() {
   echo -e >&2 \
-  " usage: $0 [--status|-s [HOOKNAME FILENAME] [-t]]\n" \
-  "usage: $0 --init\n" \
-  "usage: $0 --destroy\n" \
-  "usage: $0 --add|-a HOOKNAME FILENAME [--do-edit] [-t]\n" \
-  "usage: $0 --edit|-e HOOKNAME FILENAME [-t]\n" \
-  "usage: $0 --delete|-d HOOKNAME FILENAME [-t]"
+"usage: $0 [--status|-s [HOOKNAME FILENAME] [-t]]\n"\
+"usage: $0 --init\n"\
+"usage: $0 --destroy\n"\
+"usage: $0 --add|-a HOOKNAME FILENAME [--do-edit] [-t]\n"\
+"usage: $0 --edit|-e HOOKNAME FILENAME [-t]\n"\
+"usage: $0 --delete|-d HOOKNAME FILENAME [-t]"
 
   exit 1
 }
 
-# Function used to print the no git dir found message
-_no_git_dir() {
-  echo -e >&2 \
-  "No '.git' directory could be found. Is this inside a git repo?"
+# Helper function used to set the main function.
+_set_main_function() {
+  local name=${1:-}
 
-  exit 1
+  if [[ "$name" != "" && "$MAIN_FUNCTION" = "" ]]; then
+    MAIN_FUNCTION=$name
+  else
+    print_usage
+  fi
+}
+
+
+# Helper function used to set a flag.
+_set_flag() {
+  local key=${1:-}
+  local value=${2:-}
+
+  if [ "$key" != "" ]; then
+    set +u
+    FLAGS["$key"]=$value
+    set -u
+  fi
+}
+
+# Helper function used to get a flag.
+_get_flag() {
+  local key=${1:-}
+
+  if [[ "$key" != "" && ${FLAGS["$key"]:+isset} ]]; then
+    echo FLAGS["$key"]
+  fi
 }
 
 # Helper function used to obtain the .git directory from the current position.
-_find_git_dir () {
-  cwd=`pwd`
+_git_dir() {
+  local cwd=`pwd`
 
+  # Stop searching when folder found or root reached.
   while [ ! -d "$cwd/.git" ] && [ "x$cwd" != x/ ]; do
     cwd=`dirname "$cwd"`
   done
 
+  # Final folder check.
   if [ ! -d "$cwd/.git" ] ; then
-    _no_git_dir
+    echo -e >&2 \
+"..."\
+"${RED}No '.git' directory could be found. Is this inside a git repo?${NC}"
+
+    exit 1
   fi
 
   echo "$cwd/.git"
 }
 
 # Path to the .git directory
-GIT_DIR=$(_find_git_dir)
+GIT_DIR=$(_git_dir)
 
 # Helper function used to determine if the new git hooks space has been initialized.
 _is_ready() {
-  if [ -f "$GIT_DIR/hooks/_.sh" ]; then
-    echo 1
-  else
-    echo 0
-  fi
+  [ -f "$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME" ]
 }
 
 # Helper function used to obtain the trackedhooks/ directory from the current position.
-_find_trackedhooks_dir () {
-  cwd=`pwd`
+_trackedhooks_dir() {
+  local cwd=`pwd`
 
-  # The folder is expected to be one level above, that's why ../ is used
-  if [ -d "$cwd/../$TRACKEDHOOKS_FOLDER_NAME" ] ; then
+  # The folder is expected to be one level above, that's why ../ is used.
+  if [ -d "$cwd/../$TRACKEDHOOKS_FOLDERNAME" ] ; then
     # Returns a path with no ../ mention in it.
-    readlink -f "$cwd/../$TRACKEDHOOKS_FOLDER_NAME"
+    readlink -f "$cwd/../$TRACKEDHOOKS_FOLDERNAME"
   fi
 }
 
 # Path to the trackedhooks directory
-TRACKEDHOOKS_DIR=$(_find_trackedhooks_dir)
+TRACKEDHOOKS_DIR=$(_trackedhooks_dir)
 
 # Helper function used to return a list with all available git hooks
 _git_hooks() {
-  # It's a bit odd using the man page to get all available hooks, but I couldn't find
-  # a better way. If you can, please help me fix this.
-  # TODO: test in OSX
-  man githooks | col -b | sed -nr '/^\s{3}[[:alnum:]-]*$/p' | awk '{print $1}' | tr '\n' ' '
-}
+  # To prevent calling too many times the _git_hooks functions, we create a cache layer.
+  local gitHooks=''
 
-# Function used to set the main function to perform
-is_main_function_set() {
-  if [ "$MAIN_FUNCTION" != "" ]; then
-    print_usage
+  if [ -e /tmp/_git_hooks ]; then
+    gitHooks=`cat /tmp/_git_hooks`
+  else
+    # It's a bit odd using the man page to get all available hooks, but I couldn't find
+    # a better way. If you can, please help me fix this.
+    # TODO: test in OSX
+    gitHooks=`man githooks | col -b | sed -nr '/^\s{3}[[:alnum:]-]*$/p' | awk '{print $1}' | tr '\n' ' '`
+    echo $gitHooks > /tmp/_git_hooks
   fi
+
+  echo $gitHooks
 }
+# Remove the cache file generated inside _git_hooks on script termination.
+trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 
-# Function used to ensure there are no conflicts in the logic of parameters passed
+# Parse all the arguments passed to the program
+# TEMP needed as the `eval set --' would nuke the return value of getopt.
+#
+# NOTE: For long options you'll see all arguments are optional, that is to enable
+# the use of forms like "--key value" and "--key=value", but the control must be
+# implemented manually.
+# NOTE2: Short options can NOT be compressed under one dash (like -at or similar),
+# because parameter expects arguments, and in the case of short options, parameters
+# are whatever is next to the options, with or without space separation.
+set +e
+TEMP=`getopt -o s::a:e:d:t -l status::,init,destroy,add::,edit::,delete::,do-edit -q -- "$@"`
+retval=$?
+set -e
+
+if [ $retval != 0 ] ; then
+  print_usage
+fi
+
+# Note the quotes around $TEMP: they are essential!
+eval set -- "$TEMP"
+
+# Set 'status' as default param, when nothing passed.
+if [ $1 = "--" ] ; then 
+  eval set -- "--status $TEMP"
+fi
+
+# Process all input data
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    -s|--status)  # Display the status.
+      _set_main_function "status"
+      ;;
+
+    --init)  # Initializes the githooks space.
+      _set_main_function "init"
+      ;;
+
+    --destroy)  # Restores the git hooks space to its natural form.
+      _set_main_function "destroy"
+      ;;
+
+    -a|--add)  # Add a new hook file entry.
+      _set_main_function "add"
+      ;;
+
+    --do-edit)  # Open the favorite editor after creating the hook file entry.
+      _set_flag 'do-edit' 1
+      ;;
+
+    -e|--edit)  # Edit hook file entry.
+      _set_main_function "edit"
+      ;;
+
+    -d|--delete)  # Delete hook file entry.
+      _set_main_function "delete"
+      ;;
+
+    -t)  # Indicates it should process the trackedhooks/ folder.
+      _set_flag 'from-trackedhooks-folder' 1
+      ;;
+
+    --)	# This is not considered.
+      ;; 
+
+    *)	# Anything trapped here is considered an argument.
+      if [ -z "$1" ]; then
+        # Empty data is discarded.
+        shift
+        continue;
+      fi
+
+      ARGS+=("$1")
+      ;;
+  esac
+
+  shift
+done
+
+# Function used to ensure there are no conflicts in the logic of parameters passed.
 _check_conflicts() {
-  # Helper counter
-  args_count=${#ARGS[@]}
+  set +u
 
-  # TODO: as you can see, the flags tests are set in different conditions, as a helper
-  #       for the future cleaning process, when flag will be handled in a clever way,
-  #       like arguments.
+  # Helpers
+  local args_count=${#ARGS[@]}
+  local supported_flags=()
+
+  # Check the function vs arguments passed.
   case "$MAIN_FUNCTION" in
     status)
+      supported_flags=('from-trackedhooks-folder')
       if [[ $args_count -ne 0 && $args_count -ne 2 ]]; then
-        print_usage
-      fi
-      if [[ "$DO_EDIT" != "" ]]; then
         print_usage
       fi
       ;;
 
     init|destroy)
+      supported_flags=()
       if [[ $args_count -gt 0 ]]; then
-        print_usage
-      fi
-      if [[ "$DO_EDIT" != "" || "$FROM_TRACKEDHOOKS_FOLDER" != "" ]]; then
         print_usage
       fi
       ;;
 
     add)
+      supported_flags=('do-edit' 'from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
         print_usage
       fi
       ;;
 
     edit|delete)
+      supported_flags=('from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
-        print_usage
-      fi
-      if [[ "$DO_EDIT" != "" ]]; then
         print_usage
       fi
       ;;
@@ -175,109 +293,76 @@ _check_conflicts() {
       print_usage
       ;;
   esac
+
+  # Check the function supported vs activated flags.
+  for i in "${!FLAGS[@]}"; do
+    local skip=
+
+    for j in "${supported_flags[@]}"; do
+      if [ $i = $j ]; then
+        skip=1;
+        break;
+      fi
+    done
+
+    if [[ ! -n $skip ]]; then
+      print_usage
+    fi
+  done
+
+  set -u
 }
 
-# Parse all the arguments passed to the program
-# TEMP needed as the `eval set --' would nuke the return value of getopt.
-TEMP=`getopt -o s::a:e:d:t -l status::,init,destroy,add:,edit:,delete:,do-edit -q -- "$@"`
-
-# TODO: Correct this to make --status the default option.
-# TODO: Check how the default param for things like status work. Test the = (equals) 
-# after long name options.
-if [ $? != 0 ] ; then 
-  print_usage
-fi
-
-# Note the quotes around $TEMP: they are essential!
-eval set -- "$TEMP"
-
-# Set a param as default
-if [ $1 = "--" ] ; then 
-  eval set -- "-l $TEMP"
-fi
-
-echo "$@"
-# Process all input data
-while [ $# -gt 0 ]
-do
-  case "$1" in
-    -s|--status)  # Display the status.
-      is_main_function_set
-      MAIN_FUNCTION="status"
-      ;;
-
-    --init)  # Initializes the githooks space.
-      is_main_function_set
-      MAIN_FUNCTION="init"
-      ;;
-
-    --destroy)  # Restores the git hooks space to its natural form.
-      is_main_function_set
-      MAIN_FUNCTION="destroy"
-      ;;
-
-    -a|--add)  # Add a new hook file entry.
-      is_main_function_set
-      MAIN_FUNCTION="add"
-      ;;
-
-    --do-edit)  # Open the favorite editor after creating the hook file entry.
-      DO_EDIT=1
-      ;;
-
-    -e|--edit)  # Edit hook file entry.
-      is_main_function_set
-      MAIN_FUNCTION="edit"
-      ;;
-
-    -d|--delete)  # Delete hook file entry.
-      is_main_function_set
-      MAIN_FUNCTION="delete"
-      ;;
-
-    -t)  # Indicates it should process the trackedhooks/ folder.
-      FROM_TRACKEDHOOKS_FOLDER=1
-      ;;
-
-    --)	# This is not considered
-      ;; 
-
-    *)	# Anything trapped here is considered as an argument
-      if [ -z "$1" ]; then
-        # Empty data is discarded.
-        shift
-        continue;
-      fi
-
-      # TODO: Use the string concatenation instead of this complicated indexes approach
-      # to add new items
-      last_index=(${!ARGS[@]})
-      last_index=${last_index[@]: -1}
-      if [ -z "$last_index" ]; then
-        last_index=0
-      else
-        ((last_index+=1))
-      fi
-
-      ARGS[$last_index]=$1
-      ;;
-  esac
-
-  shift
-done
-
-# Ensure there are no conflicts in the logic of parameters passed
+# Ensure there are no conflicts in the logic of parameters passed.
 _check_conflicts
+
+# This is a general-purpose function to ask Yes/No questions in Bash, either
+# with or without a default answer. It keeps repeating the question until it
+# gets a valid answer.
+#
+# Thanks to https://gist.github.com/davejamesmiller/1965569
+_ask() {
+  # http://djm.me/ask
+  while true; do
+    local prompt="y/n"
+    local default=
+    local REPLY=
+
+    if [ "${2:-}" = "Y" ]; then
+      prompt="Yn"
+      default=Y
+    elif [ "${2:-}" = "N" ]; then
+      prompt="yN"
+      default=N
+    fi
+
+    # Ask the question - use /dev/tty in case stdin is redirected from somewhere else
+    read -p "$1 [$prompt] " REPLY < /dev/tty
+
+    # Default?
+    if [ -z "$REPLY" ]; then
+      REPLY=$default
+    fi
+
+    # Check if the reply is valid
+    case "$REPLY" in
+      Y*|y*) return 0 ;;
+      N*|n*) return 1 ;;
+    esac
+  done
+}
 
 # Display the status of the current git hooks structure.
 status() {
   # Get the
-  echo "${ARGS[1]}";
+  echo "..."
+  echo -e "${GREEN}status${NC}"
+#  echo "${ARGS[1]}";
 }
 
 # Function used to return the trigger script
 _get_trigger_script() {
-  # TODO: Finish the _.sh script
+  # TODO: Finish the trigger script
   cat << EOL
 #!/bin/bash
 #
@@ -294,62 +379,94 @@ EOL
 #     the hook will be enabled without checking if there's a hook mention in
 #     local (via file) or in remote (via folder)
 # $3, where to enable the hook, 'local', 'tracked' or both if nothing defined.
-enable_hook() {
-  local hookName=$1
-  local check=0
-  if [ $# -gt 1 ]; then
-    check=$2
-  fi
-  local where=('local' 'tracked')
-  # TODO: Add a check for invalid values passed
-  if [ $# -gt 2 ]; then
-    where=($3)
-  fi
+_enable_hook() {
+  local hookName=${1:-}
+  [[ " $(_git_hooks) " =~ " ${hookName} " ]] || return -1
+
+  local check=${2:-}
+  [[ -z $check || $check = 0 ]] && check=0 || check=1
+
+  local whereOptions=('local' 'tracked')
+  local where=(${3:-${whereOptions[@]}})
+  for i in ${where[@]}; do
+    [[ " ${whereOptions[@]} " =~ " ${i} " ]] || return -1
+  done
+
+  # Helpers
+  local hookPathLocal="$GIT_DIR/hooks/$hookName"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local hookPathTracked="$pathTracked/$hookName.d"
+  local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
 
   for place in "${where[@]}"; do
     case "$place" in
       local)
+        # Report the path where hook files will live.
+        echo $hookPathLocal.d
+
         # In check, the existence of a file is checked first.
-        if [[ $check = 1 && ( ! -f "$GIT_DIR/hooks/$hookName" || -h "$GIT_DIR/hooks/$hookName" ) ]]; then
+        if [[ $check = 1 && ( ! -f "$hookPathLocal" || -h "$hookPathLocal" ) ]]; then
           continue;
         fi
 
         # Creates the container directory.
-        if [ ! -d "$GIT_DIR/hooks/$hookName.d" ]; then
-          rm -f "$GIT_DIR/hooks/$hookName.d"
-          mkdir "$GIT_DIR/hooks/$hookName.d"
+        if [ ! -d "$hookPathLocal.d" ]; then
+          rm -f "$hookPathLocal.d"
+          mkdir "$hookPathLocal.d"
         fi
 
         # When appropriate, move the file into the new place
-        if [[ -f "$GIT_DIR/hooks/$hookName" && ! -h "$GIT_DIR/hooks/$hookName" ]]; then
-          mv "$GIT_DIR/hooks/$hookName" "$GIT_DIR/hooks/$hookName.d/$hookName.00default"
+        if [[ -f "$hookPathLocal" && ! -h "$hookPathLocal" ]]; then
+          mv "$hookPathLocal" "$hookPathLocal.d/$hookName.$DEFAULT_EXTENSION"
         fi
         ;;
 
       tracked)
-        DESTINATION_NAME="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDER_NAME"
          # Check there's a place to check for tracked hooks.
-        if [ ! -d "$DESTINATION_NAME" ]; then
+        if [ ! -d "$pathTracked" ]; then
           continue;
         fi
 
+        # Report the path where hook files will live.
+        echo $hookPathTracked
+
         # In check, the existence of a container folder is checked first.
-        if [[ $check = 1 && ! -d "$DESTINATION_NAME/$hookName.d" ]]; then
+        if [[ $check = 1 && ! -d "$hookPathTracked" ]]; then
           continue;
         fi
 
         # Creates the container directory.
-        if [ ! -d "$DESTINATION_NAME/$hookName.d" ]; then
-          rm -f "$DESTINATION_NAME/$hookName.d"
-          mkdir "$DESTINATION_NAME/$hookName.d"
+        if [ ! -d "$hookPathTracked" ]; then
+          rm -f "$hookPathTracked"
+          mkdir "$hookPathTracked"
         fi
         ;;
     esac
 
     # Cleans the space and creates the symlink.
-    rm -fr "$GIT_DIR/hooks/$hookName"
-    ln -sf --relative "$GIT_DIR/hooks/_.sh" "$GIT_DIR/hooks/$hookName"
+    rm -fr "$hookPathLocal"
+    ln -sf --relative "$triggerScript" "$hookPathLocal"
   done
+}
+
+# Wrapper function around '_enable_hook' that displays hook name suggestions when
+# invalid values are passed. Receives the same params as '_enable_hook' but exits
+# on error
+_enable_hook_suggest() {
+  set +e
+  _enable_hook $1 $2 $3
+  local retval=$?
+  set -e
+
+  if (( $retval )); then
+    echo -e >&2 \
+"${RED}:( Not valid hook name: '$1'${NC}\n"\
+"...\n"\
+"Suggestions:\n"\
+"${ORANGE}`_git_hooks | awk '{$1=$1}1' OFS=', '`${NC}"
+
+    exit
+  fi
 }
 
 # Function used to disable a given hook. The next params can be passed
@@ -357,141 +474,239 @@ enable_hook() {
 # $2, if a previous check must be performed before disabling the hook. By default
 #     the hook will be disabled without checking if there's a hook mention in
 #     local (via file) or in remote (via folder). If check enforced, a search for
-#     orphan hooks will be performed to remove them
-disable_hook() {
-  local hookName=$1
-  local check=0
-  if [ $# -gt 1 ]; then
-    check=$2
-  fi
+#     orphan hooks will be performed prior to remove them, and remove if confirmed
+#     as orphan.
+_disable_hook() {
+  local hookName=${1:-}
+  [[ " $(_git_hooks) " =~ " ${hookName} " ]] || return -1
+
+  local check=${2:-}
+  [[ -z $check || $check = 0 ]] && check=0 || check=1
+
+  # Helpers
+  local hookPathLocal="$GIT_DIR/hooks/$hookName"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local hookPathTracked="$pathTracked/$hookName.d"
 
   if [ $check = 0 ]; then
-    rm -f "$GIT_DIR/hooks/$hookName"
-  else
-    if [[ ! -d "$GIT_DIR/hooks/$hookName.d" && ! -d "$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDER_NAME/$hookName.d" ]]; then
-      rm -f "$GIT_DIR/hooks/$hookName"
-    fi
+    rm -f "$hookPathLocal"
+  elif [[ ! -d "$hookPathLocal.d" && ! -d "$hookPathTracked" ]]; then
+    rm -f "$hookPathLocal"
+  fi
+}
+
+# Wrapper function around '_disable_hook' that displays hook name suggestions when
+# invalid values are passed. Receives the same params as '_disable_hook' but exits
+# on error
+_disable_hook_suggest() {
+  set +e
+  _disable_hook $1 $2
+  local retval=$?
+  set -e
+
+  if (( $retval )); then
+    echo -e >&2 \
+"${RED}:( Not valid hook name: '$1'${NC}\n"\
+"...\n"\
+"Suggestions:\n"\
+"${ORANGE}`_git_hooks | awk '{$1=$1}1' OFS=', '`${NC}"
+
+    exit
   fi
 }
 
 # Init the git hooks structure.
 init() {
-  # Creates/recreates the _.sh script
-  (_get_trigger_script) > "$GIT_DIR/hooks/_.sh"
+  # Helpers
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
 
-  # Makes the new file executable
-  chmod +x "$GIT_DIR/hooks/_.sh"
+  # Creates/recreates the trigger script
+  (_get_trigger_script) > "$triggerScript"
+  chmod +x "$triggerScript"
 
   # Try to create a soft link for trackedhooks/ folder into .git/hooks, if origin exists.
   if [ -d "$TRACKEDHOOKS_DIR" ]; then
-    DESTINATION_NAME="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDER_NAME"
-
-    if [ ! -e "$DESTINATION_NAME" ]; then
+    if [ ! -e "$pathTracked" ]; then
       # Destination does not exist.
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$DESTINATION_NAME"
-    elif [ ! -h "$DESTINATION_NAME" ]; then
+      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
+    elif [ ! -h "$pathTracked" ]; then
       # Destination is a common file or directory, create backup then link.
-      mv "$DESTINATION_NAME" "$DESTINATION_NAME~"
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$DESTINATION_NAME"
-    elif [ "`readlink -f $DESTINATION_NAME`" != "$TRACKEDHOOKS_DIR" ]; then
+      mv "$pathTracked" "$pathTracked~"
+      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
+    elif [ "`readlink -f $pathTracked`" != "$TRACKEDHOOKS_DIR" ]; then
       # Destination is a wrong link, recreates, no backup.
-      rm "$DESTINATION_NAME"
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$DESTINATION_NAME"
+      rm -f "$pathTracked"
+      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
     fi
   fi
   
+  local gitHooks=$(_git_hooks)
+
   # Enable all hooks that can be checked as existent.
-  for hook in $(_git_hooks); do
-    enable_hook $hook 1
+  for hook in $gitHooks; do
+    _enable_hook $hook 1 > /dev/null
   done
 
   # Disable all hooks that existed but no longer does.
-  for hook in $(_git_hooks); do
-    disable_hook $hook 1
+  for hook in $gitHooks; do
+    _disable_hook $hook 1
   done
 
-  echo "Init: done!!!";
+  echo "..."
+  echo -e "${GREEN}Init: done!!!${NC}";
 }
-
-# Helper function used to init the git hooks space after user approval. Used
-# in non-init tasks but that require a previous init status
-_wanna_init() {
-  echo "Git hooks space hasn't been initialized. Do you wish to init it? [Yn]"
-
-  while true; do
-    read -pn 1 "Git hooks space hasn't been initialized. Do you wish to init it? [Yn]" yn
-      case $yn in
-        [Nn])
-          echo "NOOOOO"
-          break
-          ;;
-        [Yy])
-#        \n)
-          echo "YES!!!"
-          break
-          ;;
-#        * ) echo "Please answer yes or no.";;
-      esac
-  done
-}
-
 
 # Destroy the new git hooks structure in favor of the traditional one.
 # TODO: Add a confirmation step for this operation.
 destroy() {
-  # Loop through all the symlinks that points to the _.sh script.
-  for hook in $(_git_hooks); do
-    if [[ -h "$GIT_DIR/hooks/$hook" && "`readlink -f $GIT_DIR/hooks/$hook`" = "$GIT_DIR/hooks/_.sh" ]]; then
-      # Remove the symlink
-      rm -f "$GIT_DIR/hooks/$hook"
+  if ! _ask "Are you sure you want to destroy the current git hooks structure?" N; then
+    return;
+  fi
 
-      # Restore the .00default script as set inside.
-      if [ -e "$GIT_DIR/hooks/$hook.d/$hook.00default" ]; then
-        mv "$GIT_DIR/hooks/$hook.d/$hook.00default" "$GIT_DIR/hooks/$hook"
-        chmod +x "$GIT_DIR/hooks/$hook"
+  # Helpers
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
+
+  # Loop through all the symlinks that points to the trigger script.
+  for hookName in $(_git_hooks); do
+    # Helpers
+    local hookPathLocal="$GIT_DIR/hooks/$hookName"
+    local hookPathLocalContainer="$hookPathLocal.d"
+    local hookPathLocalDefault="$hookPathLocalContainer/$hookName.$DEFAULT_EXTENSION"
+    local hookPathTracked="$pathTracked/$hookName.d"
+
+    if [[ -h "$hookPathLocal" && "`readlink -f $hookPathLocal`" = "$triggerScript" ]]; then
+      # Remove the symlink
+      rm -f "$hookPathLocal"
+
+      # Restore the default script as set inside.
+      if [ -e "$hookPathLocalDefault" ]; then
+        mv "$hookPathLocalDefault" "$hookPathLocal"
+        chmod +x "$hookPathLocal"
       fi
 
       # Remove the container folder.
-      rm -rf "$GIT_DIR/hooks/$hook.d"
+      rm -rf "$hookPathLocalContainer"
     fi
   done
 
-  # Work with trackedhooks/ folder.
-  DESTINATION_NAME="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDER_NAME"
-
   # Remove the symlink that points to trackedhooks/ folder (if it exists).
-  if [ -h "$DESTINATION_NAME" ]; then
-    rm -f "$DESTINATION_NAME"
+  if [ -h "$pathTracked" ]; then
+    rm -f "$pathTracked"
 
     # Check for backup data, to restore them.
-    if [ -e "$DESTINATION_NAME~" ]; then
-      mv "$DESTINATION_NAME~" "$DESTINATION_NAME"
+    if [ -e "$pathTracked~" ]; then
+      mv "$pathTracked~" "$pathTracked"
     fi
   fi
 
-  # Remove the _.sh script
-  rm -f "$GIT_DIR/hooks/_.sh"
+  # Remove the trigger script
+  rm -f "$triggerScript"
 
-  echo "Destroy: done!!!";
+  echo "..."
+  echo -e "${GREEN}Destroy: done!!!${NC}";
+}
+
+# Helper function used to check the git hooks structure has been initilized correctly.
+_check_init() {
+  if ! _is_ready && _ask "Git hooks structure is not ready. Do you wanna init it?" Y ; then
+    init
+  fi
+
+  # Check again if now ready
+  if ! _is_ready ; then
+    echo -e >&2 \
+"${RED}:( No git hooks structure found. Can't continue${NC}"
+
+    exit
+  fi
 }
 
 # Add a new git hook entry.
 add() {
-  echo "add";
-_wanna_init
+  # Always check the git hooks structure is in place as first thing.
+  _check_init
+
+  # Helpers
+  local hookName=${ARGS[0]}
+  local fileName=${ARGS[1]}
+  local where='local'
+  if [[ $(_get_flag 'from-trackedhooks-folder') ]]; then
+    where='tracked'
+  fi
+  local doEdit=0
+  if [[ $(_get_flag 'do-edit') ]]; then
+    doEdit=1
+  fi
+
+  # Enables+Suggest info on hook being treated.
+  local path=$(_enable_hook_suggest $hookName 0 $where)
+  local filePath="$path/$fileName"
+
+  # Test if file exists and ask if overrides when needed.
+  if [ -f "$filePath" ] && _ask "File '$fileName' exists already. Do you wanna override it?" N; then
+    rm -f "$filePath"
+  fi
+  touch "$filePath"
+  chmod +x "$filePath"
+
+  echo "..."
+  echo -e "${GREEN}Add file: done!!!${NC}"
+
+  # Open the file for editting when requested. Favorite editor is used.
+  if (( $doEdit )) ; then
+    edit
+  fi
 }
 
 # Edit a git hook entry.
 edit() {
-  echo "edit";
+  # Always check the git hooks structure is in place as first thing.
+  _check_init
+
+  # Helpers
+  local hookName=${ARGS[0]}
+  local fileName=${ARGS[1]}
+  local where='local'
+  if [[ $(_get_flag 'from-trackedhooks-folder') ]]; then
+    where='tracked'
+  fi
+
+  # Enables+Suggest info on hook being treated.
+  local path=$(_enable_hook_suggest $hookName 1 $where)
+  local filePath="$path/$fileName"
+
+  # Test if file exists and ask if create when not found.
+  if [ ! -f "$filePath" ] && _ask "File '$fileName' does not exist. Do you wanna create it?" Y; then
+    add
+  fi
+
+  # Open an editor to edit the file
+  if [ -f "$filePath" ]; then
+    [[ `which editor` ]] && {
+      editor "$filePath"
+    } || {
+      ${VISUAL:-${EDITOR:-vi}} "$filePath"
+    }
+  fi
+
+  echo "..."
+  echo -e "${GREEN}Edit file: done!!!${NC}"
 }
 
 # Delete a given git hook entry.
 delete() {
-  echo "delete";
+  # Always check the git hooks structure is in place as first thing.
+  _check_init
+
+  echo "..."
+echo -e "${GREEN}delete${NC}"
+exit
 }
 
 # Call to the main function set
 if [ "$MAIN_FUNCTION" != "" ]; then
   $MAIN_FUNCTION
 fi
+
