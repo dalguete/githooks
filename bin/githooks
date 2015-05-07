@@ -9,31 +9,38 @@
 #
 # USAGE OPTIONS
 # -------------
-#  [--status|-s [HOOKNAME FILENAME] [-t]]
-#     Display the statu of the current struture. When no option defined for the
-#     command, this is the default one.
+#  [--status|-s [HOOKNAME FILENAME] [-ty]]
+#     Display the status of the current structure. This is the default.
 #
-#  --init
+#  --init [-y]
 #     Initializes the structure.
 #
-#  --destroy
+#  --destroy [-y]
 #     Revert the structure to its normal form.
 #
-#  --add|-a HOOKNAME FILENAME [--do-edit] [-t]
+#  --enable [HOOKNAME] [-y]
+#     Enable a given hook.
+#
+#  --disable [HOOKNAME] [-y]
+#     Disable a given hook.
+#
+#  --add|-a HOOKNAME FILENAME [--do-edit] [-ty]
 #     Add a new script for a given hook.
 #
-#  --edit|-e HOOKNAME FILENAME [-t]
+#  --edit|-e HOOKNAME FILENAME [-ty]
 #     Edit a script for a given hook.
 #
-#  --delete|-d HOOKNAME FILENAME [-t]
+#  --delete|-d HOOKNAME FILENAME [-ty]
 #     Remove a script for a given hook.
 #
 ################################################################################
 
 set -eu
 
-# TODO: Add suggestions for commands like edit add, etc
-# TODO: Add -y flag
+# TODO: Suggestions for filenames on edit and delete
+# TODO: Suggestions for hooknames on enable and disable
+# TODO: Add disable and enable
+# TODO: On add/edt/etc indicate source in error mesages (local o tracked)
 
 # Main vars, to be used only inside this script.
 # Explicitly set to prevent overrides from calling env.
@@ -57,7 +64,6 @@ NC='\033[0m' # No Color
 # Basic git check.
 if [ -z `which git` ]; then
   echo -e >&2 \
-"..."\
 "${RED}Git is not installed. Can't continue.${NC}"
 
   exit 1
@@ -66,12 +72,12 @@ fi
 # Function used to print the usage message
 print_usage() {
   echo -e >&2 \
-"usage: $0 [--status|-s [HOOKNAME FILENAME] [-t]]\n"\
-"usage: $0 --init\n"\
-"usage: $0 --destroy\n"\
-"usage: $0 --add|-a HOOKNAME FILENAME [--do-edit] [-t]\n"\
-"usage: $0 --edit|-e HOOKNAME FILENAME [-t]\n"\
-"usage: $0 --delete|-d HOOKNAME FILENAME [-t]"
+"usage: $0 [--status|-s [HOOKNAME FILENAME] [-ty]]\n"\
+"usage: $0 --init [-y]\n"\
+"usage: $0 --destroy [-y]\n"\
+"usage: $0 --add|-a HOOKNAME FILENAME [--do-edit] [-ty]\n"\
+"usage: $0 --edit|-e HOOKNAME FILENAME [-ty]\n"\
+"usage: $0 --delete|-d HOOKNAME FILENAME [-ty]"
 
   exit 1
 }
@@ -121,7 +127,6 @@ _git_dir() {
   # Final folder check.
   if [ ! -d "$cwd/.git" ] ; then
     echo -e >&2 \
-"..."\
 "${RED}No '.git' directory could be found. Is this inside a git repo?${NC}"
 
     exit 1
@@ -182,7 +187,7 @@ trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 # because parameter expects arguments, and in the case of short options, parameters
 # are whatever is next to the options, with or without space separation.
 set +e
-TEMP=`getopt -o s::a:e:d:t -l status::,init,destroy,add::,edit::,delete::,do-edit -q -- "$@"`
+TEMP=`getopt -o s::a:e:d:ty -l status::,init,destroy,add::,edit::,delete::,do-edit -q -- "$@"`
 retval=$?
 set -e
 
@@ -234,6 +239,10 @@ do
       _set_flag 'from-trackedhooks-folder' 1
       ;;
 
+    -y)  # Indicates any question to user will be answered yes, no asking.
+      _set_flag 'yes' 1
+      ;;
+
     --)	# This is not considered.
       ;; 
 
@@ -257,33 +266,33 @@ _check_conflicts() {
 
   # Helpers
   local args_count=${#ARGS[@]}
-  local supported_flags=()
+  local supported_flags=('yes')
 
   # Check the function vs arguments passed.
   case "$MAIN_FUNCTION" in
     status)
-      supported_flags=('from-trackedhooks-folder')
+      supported_flags+=('from-trackedhooks-folder')
       if [[ $args_count -ne 0 && $args_count -ne 2 ]]; then
         print_usage
       fi
       ;;
 
     init|destroy)
-      supported_flags=()
+      supported_flags+=()
       if [[ $args_count -gt 0 ]]; then
         print_usage
       fi
       ;;
 
     add)
-      supported_flags=('do-edit' 'from-trackedhooks-folder')
+      supported_flags+=('do-edit' 'from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
         print_usage
       fi
       ;;
 
     edit|delete)
-      supported_flags=('from-trackedhooks-folder')
+      supported_flags+=('from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
         print_usage
       fi
@@ -322,6 +331,12 @@ _check_conflicts
 #
 # Thanks to https://gist.github.com/davejamesmiller/1965569
 _ask() {
+  # Try to set default answer
+  local allYes=
+  if [[ $(_get_flag 'yes') ]]; then
+    allYes="y"
+  fi
+
   # http://djm.me/ask
   while true; do
     local prompt="y/n"
@@ -337,7 +352,14 @@ _ask() {
     fi
 
     # Ask the question - use /dev/tty in case stdin is redirected from somewhere else
-    read -p "$1 [$prompt] " REPLY < /dev/tty
+    if [[ -z "$allYes" ]]; then
+      printf "${ORANGE}"
+      read -p "$1 [$prompt] " REPLY < /dev/tty
+      printf "${NC}"
+    else
+      echo -e "${ORANGE}$1 [$prompt] $allYes${NC}"
+      REPLY=$allYes
+    fi
 
     # Default?
     if [ -z "$REPLY" ]; then
@@ -355,7 +377,6 @@ _ask() {
 # Display the status of the current git hooks structure.
 status() {
   # Get the
-  echo "..."
   echo -e "${GREEN}status${NC}"
 #  echo "${ARGS[1]}";
 }
@@ -460,12 +481,11 @@ _enable_hook_suggest() {
 
   if (( $retval )); then
     echo -e >&2 \
-"${RED}:( Not valid hook name: '$1'${NC}\n"\
-"...\n"\
+"${RED}Not valid hook name: '$1'${NC}\n"\
 "Suggestions:\n"\
 "${ORANGE}`_git_hooks | awk '{$1=$1}1' OFS=', '`${NC}"
 
-    exit
+    exit $retval
   fi
 }
 
@@ -492,26 +512,6 @@ _disable_hook() {
     rm -f "$hookPathLocal"
   elif [[ ! -d "$hookPathLocal.d" && ! -d "$hookPathTracked" ]]; then
     rm -f "$hookPathLocal"
-  fi
-}
-
-# Wrapper function around '_disable_hook' that displays hook name suggestions when
-# invalid values are passed. Receives the same params as '_disable_hook' but exits
-# on error
-_disable_hook_suggest() {
-  set +e
-  _disable_hook $1 $2
-  local retval=$?
-  set -e
-
-  if (( $retval )); then
-    echo -e >&2 \
-"${RED}:( Not valid hook name: '$1'${NC}\n"\
-"...\n"\
-"Suggestions:\n"\
-"${ORANGE}`_git_hooks | awk '{$1=$1}1' OFS=', '`${NC}"
-
-    exit
   fi
 }
 
@@ -553,12 +553,10 @@ init() {
     _disable_hook $hook 1
   done
 
-  echo "..."
   echo -e "${GREEN}Init: done!!!${NC}";
 }
 
 # Destroy the new git hooks structure in favor of the traditional one.
-# TODO: Add a confirmation step for this operation.
 destroy() {
   if ! _ask "Are you sure you want to destroy the current git hooks structure?" N; then
     return;
@@ -604,7 +602,6 @@ destroy() {
   # Remove the trigger script
   rm -f "$triggerScript"
 
-  echo "..."
   echo -e "${GREEN}Destroy: done!!!${NC}";
 }
 
@@ -617,9 +614,9 @@ _check_init() {
   # Check again if now ready
   if ! _is_ready ; then
     echo -e >&2 \
-"${RED}:( No git hooks structure found. Can't continue${NC}"
+"${RED}No git hooks structure found. Can't continue${NC}"
 
-    exit
+    exit 1
   fi
 }
 
@@ -641,6 +638,13 @@ add() {
   fi
 
   # Enables+Suggest info on hook being treated.
+  #
+  # TODO: Check how to improve this limitation. This has be be executed twice as
+  # the first time an internal control is performed. In case of error that will 
+  # exit the script. If no problem, the second call results can be stored in a var.
+  # It seems the construction '$()' creates a sub process, that causes the internal
+  # exit in the function to be bypassed. Help here, appreciated!
+  _enable_hook_suggest $hookName 0 $where > /dev/null
   local path=$(_enable_hook_suggest $hookName 0 $where)
   local filePath="$path/$fileName"
 
@@ -651,7 +655,6 @@ add() {
   touch "$filePath"
   chmod +x "$filePath"
 
-  echo "..."
   echo -e "${GREEN}Add file: done!!!${NC}"
 
   # Open the file for editting when requested. Favorite editor is used.
@@ -674,6 +677,15 @@ edit() {
   fi
 
   # Enables+Suggest info on hook being treated.
+  # Note the '1' passed. That guarantees the hook won't be added if not present
+  # already. We just need the path obtained.
+  #
+  # TODO: Check how to improve this limitation. This has be be executed twice as
+  # the first time an internal control is performed. In case of error that will 
+  # exit the script. If no problem, the second call results can be stored in a var.
+  # It seems the construction '$()' creates a sub process, that causes the internal
+  # exit in the function to be bypassed. Help here, appreciated!
+  _enable_hook_suggest $hookName 1 $where > /dev/null
   local path=$(_enable_hook_suggest $hookName 1 $where)
   local filePath="$path/$fileName"
 
@@ -689,10 +701,9 @@ edit() {
     } || {
       ${VISUAL:-${EDITOR:-vi}} "$filePath"
     }
-  fi
 
-  echo "..."
-  echo -e "${GREEN}Edit file: done!!!${NC}"
+    echo -e "${GREEN}Edit file: done!!!${NC}"
+  fi
 }
 
 # Delete a given git hook entry.
@@ -700,9 +711,57 @@ delete() {
   # Always check the git hooks structure is in place as first thing.
   _check_init
 
-  echo "..."
-echo -e "${GREEN}delete${NC}"
-exit
+  # Helpers
+  local hookName=${ARGS[0]}
+  local fileName=${ARGS[1]}
+  local where='local'
+  if [[ $(_get_flag 'from-trackedhooks-folder') ]]; then
+    where='tracked'
+  fi
+
+  # Enable+Suggest info on hook being treated. Sounds a bit contradictory, but yes,
+  # an enable is processed. Note the '1' passed. That guarantees the hook won't
+  # be added if not present already. We just need the path obtained.
+  #
+  # TODO: Check how to improve this limitation. This has be be executed twice as
+  # the first time an internal control is performed. In case of error that will 
+  # exit the script. If no problem, the second call results can be stored in a var.
+  # It seems the construction '$()' creates a sub process, that causes the internal
+  # exit in the function to be bypassed. Help here, appreciated!
+  _enable_hook_suggest $hookName 1 $where > /dev/null
+  local path=$(_enable_hook_suggest $hookName 1 $where)
+  local filePath="$path/$fileName"
+
+  if [[ ! -e "$filePath" ]]; then
+    echo -e >&2 \
+"${RED}No script of name '$fileName' could be found from hook '$hookName'${NC}"
+
+    exit 1
+  fi
+
+  # Ask before proceeding
+  if ! _ask "Are you sure you wanna remove script '$fileName' from hook '$hookName'?" N; then
+    return
+  fi
+
+  # As there's no guarantee the folder path exists, a check must be done first.
+  if [[ -d "$path" ]]; then
+    # Remove the file and perform some cleaning to remove orphan items
+    rm -f "$filePath"
+
+    # Check the folder is now empty to remove it and perform a hook cleaning process.
+    [[ "$(ls -A $path)" ]] || {
+      rm -rf "$path"
+      _disable_hook $hookName 1    
+    }
+
+    echo -e "${GREEN}Delete file: done!!!${NC}"
+  else
+    echo -e >&2 \
+"${RED}No hook container folder found. Already deleted?${NC}"
+
+    exit 1
+  fi
 }
 
 # Call to the main function set
