@@ -62,41 +62,62 @@ This script can be used to create and handle this structure, so you only worry
 about creating the hook process you want.
 
 # HOW TO USE THIS SCRIPT
-You can perform several operations, as detailed below:
+You can perform several operations. You'll see all of them share the option -y,
+that's used to reply yes to any prompted question. And the options are:
 
-* **`--status/-s [<hook-name> <file-name>] [-t]` (default)**. General status info with all
-active hooks and paths to their files. If no options defined, it will print
-all hooks info, otherwise only those ones that make a match. '-t' means look
-only in trackedhooks/ folder. The status report also includes info about
-current structure.
+* **`--status/-s [<hook-name> <file-name>] [-ty]` (default)**. General status info
+with all active hooks and paths to their files. If no options defined, it will print
+all hooks info, otherwise only those ones that make a match. '-t' means look only
+in trackedhooks/ folder. The status report also includes info about current structure.
 
-* **`--init`**. Creates the basic structure, as defined above. The next is performed:
+* **`--init [-y]`**. Creates the basic structure, as defined above. The next is performed:
 
   * Remove+Add the _.sh script.
   * Remove+Add the linked trackedhooks/ folder.
   * Transform all active hook files into the new chaining version.
 
-* **`--destroy`**. Reverts the creation of the new structure, New files and folders will
-be removed. Active hooks will be kept as active, but in case more than one file
-has been detected, only the '00default' will be used. Other files will be left
-their respective folders, ones won't be removed to preserve your data.
+* **`--destroy [-y]`**. Reverts the creation of the new structure, New files and
+folders will be removed. Active hooks will be kept as active, but in case more than
+one file has been detected, only the '00default' will be used. Other files will be
+left their respective folders, ones won't be removed to preserve your data.
 trackedhooks/ folder and _.sh script will be removed.
 
-* **`--add/-a <hook-name> <file-name> [-t] [--do-edit]`**. Creates a new hook file, given
-the hook type and the file name. On collision, it will ask before proceed. The
-option '-t' means create it in the trackedhooks/ folder, whenever possible.
+* **`--on/-1 <hook-name> [-y]`**. Activate a given hook given the hook type. It just
+deals with the link file, the one that points to the _.sh script.
+
+* **`--off/-0 <hook-name> [-y]`**. Deactivate a given hook given the hook type. It
+just deals with the link file, the one that points to the _.sh script.
+
+* **`--add/-a <hook-name> <file-name> [-ty] [--do-edit]`**. Creates a new hook file,
+given the hook type and the file name. On collision, it will ask before proceed.
+The option '-t' means create it in the trackedhooks/ folder, whenever possible.
 When no options given, the command will respond with an error and possible
 options.
-On success, the route to the new file will be printed and your favorite editor
-opened, if the option '--do-edit' is set too
+On success, the file wll be created/recreated and your favorite editor opened, if
+the option '--do-edit' is set too.
 
-* **`--edit/-e <hook-name> <file-name> [-t]`**. Let you edit a given hook file, given the
-hook type and the file name. It uses the favorite editor set. The option '-t'
-means search in the trackedhooks/ folder, whenever possible. When no options
-given, the command will respond with an error and possible options.
+* **`--edit/-e <hook-name> <file-name> [-ty] [--do-add]`**. Let you edit a given hook
+file, given the hook type and the file name. It uses the favorite editor set. The
+option '-t' means search in the trackedhooks/ folder, whenever possible. When no
+options given, the command will respond with an error and possible options.
+In case the file does not exist, you can create it there by using the option --do-add.
 
-* **`--delete/-d <hook-name> <file-name> [-t]`**. Delete a given hook file, given the
+* **`--delete/-d <hook-name> <file-name> [-ty]`**. Delete a given hook file, given the
 hook type and the file name. The option '-t' means search in the trackedhooks/
 folder, whenever possible. When no options given, the command will respond with
 an error and possible options.
+
+# EXPORTED VARIABLES
+There are some vars you can set to alter some settings. Those are:
+
+* **`TRACKEDHOOKS_FOLDERNAME`**. Used to change the name of the trackedhooks/ folder
+to something custom.
+
+* **`TRIGGERSCRIPT_FILENAME`**. Used to change the name of the generated triggering
+script.
+
+* **`DEFAULT_EXTENSION`**. Used to change extension used for already existing scripts
+in local when moved to the new location.
+
+* **`NO_COLORS`**. Used to deactivate colored messages.
 

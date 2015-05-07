@@ -18,16 +18,16 @@
 #  --destroy [-y]
 #     Revert the structure to its normal form.
 #
-#  --enable [HOOKNAME] [-y]
-#     Enable a given hook.
+#  --on|1 HOOKNAME [-y]
+#     Activates a given hook.
 #
-#  --disable [HOOKNAME] [-y]
-#     Disable a given hook.
+#  --off|0 HOOKNAME [-y]
+#     Deactivates a given hook.
 #
 #  --add|-a HOOKNAME FILENAME [--do-edit] [-ty]
 #     Add a new script for a given hook.
 #
-#  --edit|-e HOOKNAME FILENAME [-ty]
+#  --edit|-e HOOKNAME FILENAME [--do-add] [-ty]
 #     Edit a script for a given hook.
 #
 #  --delete|-d HOOKNAME FILENAME [-ty]
@@ -36,11 +36,6 @@
 ################################################################################
 
 set -eu
-
-# TODO: Suggestions for filenames on edit and delete
-# TODO: Suggestions for hooknames on enable and disable
-# TODO: Add disable and enable
-# TODO: On add/edt/etc indicate source in error mesages (local o tracked)
 
 # Main vars, to be used only inside this script.
 # Explicitly set to prevent overrides from calling env.
@@ -54,12 +49,24 @@ declare -A FLAGS=()
 : ${TRACKEDHOOKS_FOLDERNAME:="trackedhooks"}
 : ${TRIGGERSCRIPT_FILENAME:="_.sh"}
 : ${DEFAULT_EXTENSION:="00default"}
+: ${NO_COLORS:=0}
 
 # Some fancy stuff for coloring messages
 RED='\033[0;31m'
+LIGHTRED='\033[1;31m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
+LIGHTGREEN='\033[1;32m'
 NC='\033[0m' # No Color
+
+(( $NO_COLORS )) && {
+  RED=
+  LIGHTRED=
+  GREEN=
+  ORANGE=
+  LIGHTGREEN=
+  NC=
+}
 
 # Basic git check.
 if [ -z `which git` ]; then
@@ -75,8 +82,10 @@ print_usage() {
 "usage: $0 [--status|-s [HOOKNAME FILENAME] [-ty]]\n"\
 "usage: $0 --init [-y]\n"\
 "usage: $0 --destroy [-y]\n"\
+"usage: $0 --on|-1 HOOKNAME [-y]\n"\
+"usage: $0 --off|-0 HOOKNAME [-y]\n"\
 "usage: $0 --add|-a HOOKNAME FILENAME [--do-edit] [-ty]\n"\
-"usage: $0 --edit|-e HOOKNAME FILENAME [-ty]\n"\
+"usage: $0 --edit|-e HOOKNAME FILENAME [--do-add] [-ty]\n"\
 "usage: $0 --delete|-d HOOKNAME FILENAME [-ty]"
 
   exit 1
@@ -127,7 +136,7 @@ _git_dir() {
   # Final folder check.
   if [ ! -d "$cwd/.git" ] ; then
     echo -e >&2 \
-"${RED}No '.git' directory could be found. Is this inside a git repo?${NC}"
+"${RED}No ${LIGHTRED}.git${RED} directory could be found. Is this inside a git repo?${NC}"
 
     exit 1
   fi
@@ -187,7 +196,7 @@ trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 # because parameter expects arguments, and in the case of short options, parameters
 # are whatever is next to the options, with or without space separation.
 set +e
-TEMP=`getopt -o s::a:e:d:ty -l status::,init,destroy,add::,edit::,delete::,do-edit -q -- "$@"`
+TEMP=`getopt -o s::1:0:a:e:d:ty -l status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@"`
 retval=$?
 set -e
 
@@ -219,12 +228,24 @@ do
       _set_main_function "destroy"
       ;;
 
+    -1|--on)  # Activate a given hook.
+      _set_main_function "activate"
+      ;;
+
+    -0|--off)  # Deactivate a given hook.
+      _set_main_function "deactivate"
+      ;;
+
     -a|--add)  # Add a new hook file entry.
       _set_main_function "add"
       ;;
 
     --do-edit)  # Open the favorite editor after creating the hook file entry.
       _set_flag 'do-edit' 1
+      ;;
+
+    --do-add)  # Create the script file if doens't exist, on edit.
+      _set_flag 'do-add' 1
       ;;
 
     -e|--edit)  # Edit hook file entry.
@@ -284,6 +305,13 @@ _check_conflicts() {
       fi
       ;;
 
+    activate|deactivate)
+      supported_flags+=()
+      if [[ $args_count -ne 1 ]]; then
+        print_usage
+      fi
+      ;;
+
     add)
       supported_flags+=('do-edit' 'from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
@@ -291,7 +319,14 @@ _check_conflicts() {
       fi
       ;;
 
-    edit|delete)
+    edit)
+      supported_flags+=('do-add' 'from-trackedhooks-folder')
+      if [[ $args_count -ne 2 ]]; then
+        print_usage
+      fi
+      ;;
+
+    delete)
       supported_flags+=('from-trackedhooks-folder')
       if [[ $args_count -ne 2 ]]; then
         print_usage
@@ -376,7 +411,7 @@ _ask() {
 
 # Display the status of the current git hooks structure.
 status() {
-  # Get the
+  # TODO: implement this
   echo -e "${GREEN}status${NC}"
 #  echo "${ARGS[1]}";
 }
@@ -392,6 +427,32 @@ _get_trigger_script() {
 mundo
 carajo
 EOL
+}
+
+# Helper function used to create the link between a hook file and the trigger script.
+_add_link_trigger_script(){
+  local hookName=${1:-}
+  [[ " $(_git_hooks) " =~ " ${hookName} " ]] || return -1
+
+  # Helpers
+  local hookPathLocal="$GIT_DIR/hooks/$hookName"
+  local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
+
+  # Cleans the space and creates the symlink.
+  _remove_link_trigger_script $hookName
+  ln -sf --relative "$triggerScript" "$hookPathLocal"
+}
+
+# Helper function used to delete the link between a hook file and the trigger script.
+_remove_link_trigger_script(){
+  local hookName=${1:-}
+  [[ " $(_git_hooks) " =~ " ${hookName} " ]] || return -1
+
+  # Helpers
+  local hookPathLocal="$GIT_DIR/hooks/$hookName"
+
+  # Cleans the space and creates the symlink.
+  rm -fr "$hookPathLocal"
 }
 
 # Function used to enable a given hook. The next params can be passed
@@ -464,29 +525,59 @@ _enable_hook() {
         ;;
     esac
 
-    # Cleans the space and creates the symlink.
-    rm -fr "$hookPathLocal"
-    ln -sf --relative "$triggerScript" "$hookPathLocal"
+    # Create the link between hook file and trigger script.
+    _add_link_trigger_script $hookName
   done
 }
 
-# Wrapper function around '_enable_hook' that displays hook name suggestions when
-# invalid values are passed. Receives the same params as '_enable_hook' but exits
-# on error
-_enable_hook_suggest() {
-  set +e
-  _enable_hook $1 $2 $3
-  local retval=$?
-  set -e
+# Helper function used to display hook name suggestions when invalid values are
+# passed. Receives the hook name to check.
+_hook_suggest() {
+  local hookName=${1:-}
 
-  if (( $retval )); then
+  [[ " $(_git_hooks) " =~ " ${hookName} " ]] || {
     echo -e >&2 \
-"${RED}Not valid hook name: '$1'${NC}\n"\
+"${RED}No hook name ${LIGHTRED}$hookName${RED} found${NC}\n"\
 "Suggestions:\n"\
 "${ORANGE}`_git_hooks | awk '{$1=$1}1' OFS=', '`${NC}"
 
-    exit $retval
-  fi
+    exit 1
+  }
+}
+
+# Helper function used to display file name suggestions when invalid values are
+# passed. Exits on error. The next params can be passed:
+# $1, name of the hook to work with.
+# $2, name of the script file to work with.
+# $3, where to look it for: 'local' or 'tracked'
+_file_suggest() {
+  local hookName=$1
+  local fileName=$2
+  local where=$3
+
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  # Get the path of hooks folder.
+  local path=$(_enable_hook $hookName 1 $where)
+  local filePath="$path/$fileName"
+
+  # Check the file exists
+  [[ -f "$filePath" ]] || {
+    echo -e >&2 \
+"${RED}No script ${LIGHTRED}$fileName${RED} found for ${LIGHTRED}$where${RED} hook ${LIGHTRED}$hookName${NC}"
+
+    local items=
+    [[ -d "$path" ]] && {
+      items=$(find $path -maxdepth 1 -type f -exec basename {} \; | sed s,^./,, | sort | tr '\n' ' ' | awk '{$1=$1}1' OFS=', ')
+
+      echo -e >&2 \
+"Suggestions:\n"\
+"${ORANGE}$items${NC}"
+    }
+
+    exit 1
+  }
 }
 
 # Function used to disable a given hook. The next params can be passed
@@ -508,10 +599,8 @@ _disable_hook() {
   local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
   local hookPathTracked="$pathTracked/$hookName.d"
 
-  if [ $check = 0 ]; then
-    rm -f "$hookPathLocal"
-  elif [[ ! -d "$hookPathLocal.d" && ! -d "$hookPathTracked" ]]; then
-    rm -f "$hookPathLocal"
+  if (( ! $check )) || [[ ! -d "$hookPathLocal.d" && ! -d "$hookPathTracked" ]]; then
+    _remove_link_trigger_script $hookName
   fi
 }
 
@@ -620,6 +709,45 @@ _check_init() {
   fi
 }
 
+# Activate a given hook
+activate() {
+  # Always check the git hooks structure is in place as first thing.
+  _check_init
+
+  # Helpers
+  local hookName=${ARGS[0]}
+
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  # Create the link between hook file and trigger script.
+  _add_link_trigger_script $hookName
+
+  echo -e "${GREEN}Activate hook ${LIGHTGREEN}$hookName${GREEN}: done!!!${NC}";
+}
+
+# Deactivate a given hook
+deactivate() {
+  # Always check the git hooks structure is in place as first thing.
+  _check_init
+
+  # Helpers
+  local hookName=${ARGS[0]}
+
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  # Ask before proceeding
+  if ! _ask "Are you sure you wanna deactivate hook '$hookName'?" N; then
+    return
+  fi
+
+  # Delete the link between hook file and trigger script.
+  _remove_link_trigger_script $hookName
+
+  echo -e "${GREEN}Deactivate hook ${LIGHTGREEN}$hookName${GREEN}: done!!!${NC}";
+}
+
 # Add a new git hook entry.
 add() {
   # Always check the git hooks structure is in place as first thing.
@@ -637,25 +765,23 @@ add() {
     doEdit=1
   fi
 
-  # Enables+Suggest info on hook being treated.
-  #
-  # TODO: Check how to improve this limitation. This has be be executed twice as
-  # the first time an internal control is performed. In case of error that will 
-  # exit the script. If no problem, the second call results can be stored in a var.
-  # It seems the construction '$()' creates a sub process, that causes the internal
-  # exit in the function to be bypassed. Help here, appreciated!
-  _enable_hook_suggest $hookName 0 $where > /dev/null
-  local path=$(_enable_hook_suggest $hookName 0 $where)
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  # Ensure hook is enbled.
+  # Note the '0' passed. That guarantees the hook container folders will be created
+  # first if not present already.
+  local path=$(_enable_hook $hookName 0 $where)
   local filePath="$path/$fileName"
 
   # Test if file exists and ask if overrides when needed.
-  if [ -f "$filePath" ] && _ask "File '$fileName' exists already. Do you wanna override it?" N; then
+  if [ -f "$filePath" ] && _ask "Script '$fileName' already exists for $where hook '$hookName'. Do you wanna override it?" N; then
     rm -f "$filePath"
   fi
   touch "$filePath"
   chmod +x "$filePath"
 
-  echo -e "${GREEN}Add file: done!!!${NC}"
+  echo -e "${GREEN}Add script ${LIGHTGREEN}$fileName${GREEN} for ${LIGHTGREEN}$where${GREEN} hook ${LIGHTGREEN}$hookName${GREEN}: done!!!${NC}"
 
   # Open the file for editting when requested. Favorite editor is used.
   if (( $doEdit )) ; then
@@ -675,22 +801,27 @@ edit() {
   if [[ $(_get_flag 'from-trackedhooks-folder') ]]; then
     where='tracked'
   fi
+  local doAdd=0
+  if [[ $(_get_flag 'do-add') ]]; then
+    doAdd=1
+  fi
 
-  # Enables+Suggest info on hook being treated.
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  if (( ! $doAdd )) ; then
+    # Check+Suggests based on the script file name passed.
+    _file_suggest $hookName $fileName $where
+  fi
+
+  # Ensure hook is enabled.
   # Note the '1' passed. That guarantees the hook won't be added if not present
   # already. We just need the path obtained.
-  #
-  # TODO: Check how to improve this limitation. This has be be executed twice as
-  # the first time an internal control is performed. In case of error that will 
-  # exit the script. If no problem, the second call results can be stored in a var.
-  # It seems the construction '$()' creates a sub process, that causes the internal
-  # exit in the function to be bypassed. Help here, appreciated!
-  _enable_hook_suggest $hookName 1 $where > /dev/null
-  local path=$(_enable_hook_suggest $hookName 1 $where)
+  local path=$(_enable_hook $hookName 1 $where)
   local filePath="$path/$fileName"
 
   # Test if file exists and ask if create when not found.
-  if [ ! -f "$filePath" ] && _ask "File '$fileName' does not exist. Do you wanna create it?" Y; then
+  if [ ! -f "$filePath" ] && _ask "Script '$fileName' does not exist for $where hook '$hookName'. Do you wanna create it?" Y; then
     add
   fi
 
@@ -702,7 +833,7 @@ edit() {
       ${VISUAL:-${EDITOR:-vi}} "$filePath"
     }
 
-    echo -e "${GREEN}Edit file: done!!!${NC}"
+    echo -e "${GREEN}Edit script ${LIGHTGREEN}$fileName${GREEN} for ${LIGHTGREEN}$where${GREEN} hook ${LIGHTGREEN}$hookName${GREEN}: done!!!${NC}"
   fi
 }
 
@@ -719,49 +850,33 @@ delete() {
     where='tracked'
   fi
 
-  # Enable+Suggest info on hook being treated. Sounds a bit contradictory, but yes,
+  # Check+Suggest the hook name based on the value passed.
+  _hook_suggest $hookName
+
+  # Check+Suggests based on the script file name passed.
+  _file_suggest $hookName $fileName $where
+
+  # Ensure hook is enabled. Sounds a bit contradictory, but yes,
   # an enable is processed. Note the '1' passed. That guarantees the hook won't
   # be added if not present already. We just need the path obtained.
-  #
-  # TODO: Check how to improve this limitation. This has be be executed twice as
-  # the first time an internal control is performed. In case of error that will 
-  # exit the script. If no problem, the second call results can be stored in a var.
-  # It seems the construction '$()' creates a sub process, that causes the internal
-  # exit in the function to be bypassed. Help here, appreciated!
-  _enable_hook_suggest $hookName 1 $where > /dev/null
-  local path=$(_enable_hook_suggest $hookName 1 $where)
+  local path=$(_enable_hook $hookName 1 $where)
   local filePath="$path/$fileName"
 
-  if [[ ! -e "$filePath" ]]; then
-    echo -e >&2 \
-"${RED}No script of name '$fileName' could be found from hook '$hookName'${NC}"
-
-    exit 1
-  fi
-
   # Ask before proceeding
-  if ! _ask "Are you sure you wanna remove script '$fileName' from hook '$hookName'?" N; then
+  if ! _ask "Are you sure you wanna remove script '$fileName' for $where hook '$hookName'?" N; then
     return
   fi
 
-  # As there's no guarantee the folder path exists, a check must be done first.
-  if [[ -d "$path" ]]; then
-    # Remove the file and perform some cleaning to remove orphan items
-    rm -f "$filePath"
+  # Remove the file and perform some cleaning to remove orphan items
+  rm -f "$filePath"
 
-    # Check the folder is now empty to remove it and perform a hook cleaning process.
-    [[ "$(ls -A $path)" ]] || {
-      rm -rf "$path"
-      _disable_hook $hookName 1    
-    }
+  # Check the folder is now empty to remove it and perform a hook cleaning process.
+  [[ "$(ls -A $path)" ]] || {
+    rm -rf "$path"
+    _disable_hook $hookName 1
+  }
 
-    echo -e "${GREEN}Delete file: done!!!${NC}"
-  else
-    echo -e >&2 \
-"${RED}No hook container folder found. Already deleted?${NC}"
-
-    exit 1
-  fi
+  echo -e "${GREEN}Delete script ${LIGHTGREEN}$fileName${GREEN} for ${LIGHTGREEN}$where${GREEN} hook ${LIGHTGREEN}$hookName${GREEN}: done!!!${NC}"
 }
 
 # Call to the main function set
