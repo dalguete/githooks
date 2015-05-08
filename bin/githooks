@@ -9,7 +9,7 @@
 #
 # USAGE OPTIONS
 # -------------
-#  [--status|-s [HOOKNAME FILENAME] [-ty]]
+#  [--status|-s [HOOKNAME] [-ty]]
 #     Display the status of the current structure. This is the default.
 #
 #  --init [-y]
