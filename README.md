@@ -65,7 +65,7 @@ about creating the hook process you want.
 You can perform several operations. You'll see all of them share the option -y,
 that's used to reply yes to any prompted question. And the options are:
 
-* **`--status/-s [<hook-name> <file-name>] [-ty]` (default)**. General status info
+* **`--status/-s [<hook-name>] [-ty]` (default)**. General status info
 with all active hooks and paths to their files. If no options defined, it will print
 all hooks info, otherwise only those ones that make a match. '-t' means look only
 in trackedhooks/ folder. The status report also includes info about current structure.
