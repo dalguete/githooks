@@ -174,7 +174,7 @@ _git_hooks() {
   if [ -e /tmp/_git_hooks ]; then
     gitHooks=`cat /tmp/_git_hooks`
   else
-    # It's a bit odd using the man page to get all available hooks, but I couldn't find
+    # It's a bit odd to use the man page to get all available hooks, but I couldn't find
     # a better way. If you can, please help me fix this.
     # TODO: test in OSX
     gitHooks=`man githooks | col -b | sed -nr '/^\s{3}[[:alnum:]-]*$/p' | awk '{print $1}' | tr '\n' ' '`
@@ -192,9 +192,9 @@ trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 # NOTE: For long options you'll see all arguments are optional, that is to enable
 # the use of forms like "--key value" and "--key=value", but the control must be
 # implemented manually.
-# NOTE2: Short options can NOT be compressed under one dash (like -at or similar),
-# because parameter expects arguments, and in the case of short options, parameters
-# are whatever is next to the options, with or without space separation.
+# NOTE2: Short options that expect parameters can NOT be compressed under one dash
+# (like -at or similar), In the case of short options, parameters are whatever is
+# next to the options, with or without space separation, and that can be problematic.
 set +e
 TEMP=`getopt -o s::1:0:a:e:d:ty -l status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@"`
 retval=$?
@@ -338,7 +338,7 @@ _check_conflicts() {
       ;;
   esac
 
-  # Check the function supported vs activated flags.
+  # Check the function supported flags vs activated flags.
   for i in "${!FLAGS[@]}"; do
     local skip=
 
@@ -366,7 +366,7 @@ _check_conflicts
 #
 # Thanks to https://gist.github.com/davejamesmiller/1965569
 _ask() {
-  # Try to set default answer
+  # Try to set a default answer
   local allYes=
   if [[ $(_get_flag 'yes') ]]; then
     allYes="y"
