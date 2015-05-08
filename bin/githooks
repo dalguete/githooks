@@ -418,14 +418,69 @@ status() {
 
 # Function used to return the trigger script
 _get_trigger_script() {
-  # TODO: Finish the trigger script
   cat << EOL
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # DO NOT MODIFY. FILE AUTOMATICALLY GENERATED!!!
 #
-mundo
-carajo
+# IMPORTANT: This script executes all scripts and then reports the errors found.
+# It has the idea of isolated processes (a script result won't stop execution
+# of the others), so don't build your scripts hoping that happens.
+
+# Get the hook name based on the file name
+hookName=\`basename \$0\`
+
+# Folders where to search for hooks
+declare -a FOLDERS=("." "$TRACKEDHOOKS_FOLDERNAME")
+
+# Helpers
+declare -A exitCodes
+execOrder=()
+
+# Loop through all folders and execute every script
+for folder in "\${FOLDERS[@]}"; do
+  path="\`pwd\`/\$folder/\$hookName.d"
+
+  [[ -d "\$path" ]] && {
+
+    for script in \$path/*; do
+      [[ -f "\$script" && -x "\$script" ]] && {
+
+        # Get a printable version of the script path, relative to git hooks folder.
+        scriptRelativePath="\$folder/\`realpath \$script --relative-to \$folder\`"
+        scriptRelativePath=\${scriptRelativePath#./}
+
+        # Execute the script and register that.
+        \$script "\$@"
+        exitCodes[\$scriptRelativePath]=\$?
+        execOrder+=(\$scriptRelativePath)
+
+      }
+    done;
+
+  }
+done
+
+# Flag to control the exit code
+exitCode=0
+
+# Check error codes returned.
+for scriptRelativePath in "\${execOrder[@]}"; do
+  errCode=\${exitCodes[\$scriptRelativePath]}
+
+  (( \$errCode )) && {
+    # Stores the first error code
+    (( ! \$exitCode )) && {
+      exitCode=\$errCode
+    }
+
+    echo -e >&2 "Script '\$scriptRelativePath' failed with error code \$errCode"
+  }
+done
+
+# Ends passing the code.
+exit \$exitCode
+
 EOL
 }
 
