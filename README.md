@@ -8,19 +8,21 @@ In general in any modern GNU/Linux this will work, but for OS X some adjustments
 have to be made; all can be done by using Homebrew (tested in a system using that).
 Next the reqs plus some installation guides:
 * **Git (of course)**
-  *OS X* - No problem by using the default git version.
+*OS X* - No problem by using the default git version.
 * **Bash >=4**
-  *OS X* - Follow this guide http://johndjameson.com/blog/updating-your-shell-with-homebrew/ to enable it.
+*OS X* - Follow this guide http://johndjameson.com/blog/updating-your-shell-with-homebrew/ to enable it.
 * **Coreutils >=8**
-  *OS X* - `brew install coreutils` to enable it.
+*OS X* - `brew install coreutils` to enable it.
 * **getopt >=1.1.6**
-  *OS X* - `brew install gnu-getopt` to enable it.
+*OS X* - `brew install gnu-getopt` to enable it.
+* **Homebrew**
+only for *OS X*.
 
 **Important for OS X** to mention there’s no need to install Homebrew packages with `--default-names` options, as the script internally deals with that, when available.
 
 **NOTE:** Maybe there are some clever ways to overcome the OS differences, but it seems
 easier and in general good for the OS to have more up-to-date packages available. In any
-case, fixes are welcome. In a Mac env, you can use Homebrew or similar to update native tools to the required versions.
+case, fixes are welcome.
 
 # INSTALL (it's quick)
 Clone this repo and store it in a folder named **.githooks** *(dot at the beggining)*

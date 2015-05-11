@@ -59,20 +59,24 @@ _wrapper() {
 
   # Set a default command to use
   local defaultCommand=$command
-  local altCommand="g$command"
 
-  # Try to use an alternative command, based on name passed (ala Homebrew?)
-  case "$command" in
-    getopt)
-      altCommand="$(brew --prefix "gnu-$command")/bin/$command"
-      ;;
-  esac
+  # Check the OS is Mac OS X, as the controls here are only meant for it.
+  if [[ "$(uname -s)" = "Darwin" ]]; then
+    local altCommand="g$command"
 
-  # Check the command exists and it’s not a local alias.
-  # Thanks to http://stackoverflow.com/a/7522866
-  local loc=$(type -p $altCommand)
-  if [[ ! -z $loc ]]; then
-    defaultCommand=$altCommand
+    # Try to use an alternative command, based on name passed (ala Homebrew?)
+    case "$command" in
+      getopt)
+        altCommand=$(brew --prefix "gnu-$command")/bin/"$command"
+        ;;
+    esac
+
+    # Check the command exists and it’s not a local alias.
+    # Thanks to http://stackoverflow.com/a/7522866
+    local loc=$(type -p $altCommand)
+    if [[ ! -z $loc ]]; then
+      defaultCommand=$altCommand
+    fi
   fi
 
   # Execute the command, but removing the first param from the list.
