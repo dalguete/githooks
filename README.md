@@ -3,6 +3,25 @@ Utility used to enable some particular capabilities when using git hooks, as
 chaining support and load of versioned hook files inside the repo. Your defined
 hooks will be preserved, but will live in a more appropriate place.
 
+# REQUIREMENTS
+In general in any modern GNU/Linux this will work, but for OS X some adjustments
+have to be made; all can be done by using Homebrew (tested in a system using that).
+Next the reqs plus some installation guides:
+* **Git (of course)**
+  *OS X* - No problem by using the default git version.
+* **Bash >=4**
+  *OS X* - Follow this guide http://johndjameson.com/blog/updating-your-shell-with-homebrew/ to enable it.
+* **Coreutils >=8**
+  *OS X* - `brew install coreutils` to enable it.
+* **getopt >=1.1.6**
+  *OS X* - `brew install gnu-getopt` to enable it.
+
+**Important for OS X** to mention there’s no need to install Homebrew packages with `--default-names` options, as the script internally deals with that, when available.
+
+**NOTE:** Maybe there are some clever ways to overcome the OS differences, but it seems
+easier and in general good for the OS to have more up-to-date packages available. In any
+case, fixes are welcome. In a Mac env, you can use Homebrew or similar to update native tools to the required versions.
+
 # INSTALL (it's quick)
 Clone this repo and store it in a folder named **.githooks** *(dot at the beggining)*
 next to *.git* folder, so *code* and *trackedhooks* can travel with your repo. Any
@@ -47,10 +66,9 @@ Can look a bit intimidating, but actually it's really simple.
   Files inside it will be called sequentially, using alphanumeric sort, so you
   state their execution order.
 
-* **trackedhooks/**: link that points to .githooks/trackedhooks/ folder, to make
-  them available here. Inner structure must follow the one for "*hook names folder*.d/".
-  Only changes performed here are committable; you know, because .githooks/ folder
-  will live inside the repo.
+* **trackedhooks/**: link that points to .githooks/ folder, to make them available
+  here. Inner structure must follow the one for "*hook names folder*.d/". Only
+  changes performed here are committable.
 
 * **_.sh**: special file used to concentrate all git hooks activity. Remember
   all files in *hook files* are links to this one? Well, that's because this
@@ -80,7 +98,7 @@ in trackedhooks/ folder. The status report also includes info about current stru
 * **`--destroy [-y]`**. Reverts the creation of the new structure, New files and
 folders will be removed. Active hooks will be kept as active, but in case more than
 one file has been detected, only the '00default' will be used. Other files will be
-left in their respective folders, ones that won't be removed to preserve your data.
+left their respective folders, ones won't be removed to preserve your data.
 trackedhooks/ folder and _.sh script will be removed.
 
 * **`--on/-1 <hook-name> [-y]`**. Activate a given hook given the hook type. It just
@@ -92,15 +110,15 @@ just deals with the link file, the one that points to the _.sh script.
 * **`--add/-a <hook-name> <file-name> [-ty] [--do-edit]`**. Creates a new hook file,
 given the hook type and the file name. On collision, it will ask before proceed.
 The option '-t' means create it in the trackedhooks/ folder, whenever possible.
-When wrong args passed, the command will respond with an error and possible
+When no options given, the command will respond with an error and possible
 options.
 On success, the file wll be created/recreated and your favorite editor opened, if
 the option '--do-edit' is set too.
 
 * **`--edit/-e <hook-name> <file-name> [-ty] [--do-add]`**. Let you edit a given hook
 file, given the hook type and the file name. It uses the favorite editor set. The
-option '-t' means search in the trackedhooks/ folder, whenever possible. When wrong
-args passed, the command will respond with an error and possible options.
+option '-t' means search in the trackedhooks/ folder, whenever possible. When no
+options given, the command will respond with an error and possible options.
 In case the file does not exist, you can create it there by using the option --do-add.
 
 * **`--delete/-d <hook-name> <file-name> [-ty]`**. Delete a given hook file, given the
@@ -109,7 +127,7 @@ folder, whenever possible. When no options given, the command will respond with
 an error and possible options.
 
 # EXPORTED VARIABLES
-There are some vars you can export to alter some settings. Those are:
+There are some vars you can set to alter some settings. Those are:
 
 * **`TRACKEDHOOKS_FOLDERNAME`**. Used to change the name of the trackedhooks/ folder
 to something custom.

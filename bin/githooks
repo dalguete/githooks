@@ -9,7 +9,7 @@
 #
 # USAGE OPTIONS
 # -------------
-#  [--status|-s [HOOKNAME] [-ty]]
+#  [--status|-s [HOOKNAME FILENAME] [-ty]]
 #     Display the status of the current structure. This is the default.
 #
 #  --init [-y]
@@ -42,6 +42,43 @@ set -eu
 MAIN_FUNCTION=
 declare -a ARGS=()
 declare -A FLAGS=()
+
+# Helper function used to wrap some function calls whenever a better version could
+# be available. Specially important when dealing with Mac envs, as the tools available
+# there are not always the latest versions.
+# Receives a bunch of params, being the first one, the name of the command to call,
+# and the rest, the normal params that function would require.
+_wrapper() {
+  local command=${1:-}
+  [[ -z $command ]] && {
+    echo -e >&2 \
+"${RED}No command name to wrap passed.${NC}"
+
+    exit 1
+  }
+
+  # Set a default command to use
+  local defaultCommand=$command
+  local altCommand="g$command"
+
+  # Try to use an alternative command, based on name passed (ala Homebrew?)
+  case "$command" in
+    getopt)
+      altCommand="$(brew --prefix "gnu-$command")/bin/$command"
+      ;;
+  esac
+
+  # Check the command exists and it’s not a local alias.
+  # Thanks to http://stackoverflow.com/a/7522866
+  local loc=$(type -p $altCommand)
+  if [[ ! -z $loc ]]; then
+    defaultCommand=$altCommand
+  fi
+
+  # Execute the command, but removing the first param from the list.
+  shift
+  $defaultCommand "$@"
+}
 
 # Config vars, overrides are permitted.
 # That's the reason of the parameter expansion.
@@ -102,7 +139,6 @@ _set_main_function() {
   fi
 }
 
-
 # Helper function used to set a flag.
 _set_flag() {
   local key=${1:-}
@@ -159,7 +195,7 @@ _trackedhooks_dir() {
   # The folder is expected to be one level above, that's why ../ is used.
   if [ -d "$cwd/../$TRACKEDHOOKS_FOLDERNAME" ] ; then
     # Returns a path with no ../ mention in it.
-    readlink -f "$cwd/../$TRACKEDHOOKS_FOLDERNAME"
+    _wrapper readlink -f "$cwd/../$TRACKEDHOOKS_FOLDERNAME"
   fi
 }
 
@@ -174,10 +210,10 @@ _git_hooks() {
   if [ -e /tmp/_git_hooks ]; then
     gitHooks=`cat /tmp/_git_hooks`
   else
-    # It's a bit odd to use the man page to get all available hooks, but I couldn't find
+    # It's a bit odd using the man page to get all available hooks, but I couldn't find
     # a better way. If you can, please help me fix this.
     # TODO: test in OSX
-    gitHooks=`man githooks | col -b | sed -nr '/^\s{3}[[:alnum:]-]*$/p' | awk '{print $1}' | tr '\n' ' '`
+    gitHooks=`man githooks | col -b | sed -nE '/^[[:space:]]{3}[[:alnum:]-]*$/p' | awk '{print $1}' | tr '\n' ' '`
     echo $gitHooks > /tmp/_git_hooks
   fi
 
@@ -192,11 +228,11 @@ trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 # NOTE: For long options you'll see all arguments are optional, that is to enable
 # the use of forms like "--key value" and "--key=value", but the control must be
 # implemented manually.
-# NOTE2: Short options that expect parameters can NOT be compressed under one dash
-# (like -at or similar), In the case of short options, parameters are whatever is
-# next to the options, with or without space separation, and that can be problematic.
+# NOTE2: Short options can NOT be compressed under one dash (like -at or similar),
+# because parameter expects arguments, and in the case of short options, parameters
+# are whatever is next to the options, with or without space separation.
 set +e
-TEMP=`getopt -o s::1:0:a:e:d:ty -l status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@"`
+TEMP=$(_wrapper getopt -o s::1:0:a:e:d:ty -l status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@")
 retval=$?
 set -e
 
@@ -334,11 +370,12 @@ _check_conflicts() {
       ;;
 
     *)
+
       print_usage
       ;;
   esac
 
-  # Check the function supported flags vs activated flags.
+  # Check the function supported vs activated flags.
   for i in "${!FLAGS[@]}"; do
     local skip=
 
@@ -366,7 +403,7 @@ _check_conflicts
 #
 # Thanks to https://gist.github.com/davejamesmiller/1965569
 _ask() {
-  # Try to set a default answer
+  # Try to set default answer
   local allYes=
   if [[ $(_get_flag 'yes') ]]; then
     allYes="y"
@@ -495,7 +532,7 @@ _add_link_trigger_script(){
 
   # Cleans the space and creates the symlink.
   _remove_link_trigger_script $hookName
-  ln -sf --relative "$triggerScript" "$hookPathLocal"
+  _wrapper ln -sf --relative "$triggerScript" "$hookPathLocal"
 }
 
 # Helper function used to delete the link between a hook file and the trigger script.
@@ -624,7 +661,8 @@ _file_suggest() {
 
     local items=
     [[ -d "$path" ]] && {
-      items=$(find $path -maxdepth 1 -type f -exec basename {} \; | sed s,^./,, | sort | tr '\n' ' ' | awk '{$1=$1}1' OFS=', ')
+      # Only exec files are considered as options.
+      items=$(find $path -maxdepth 1 -type f -perm +111 -exec basename {} \; | sed s,^./,, | sort | tr '\n' ' ' | awk '{$1=$1}1' OFS=', ')
 
       echo -e >&2 \
 "Suggestions:\n"\
@@ -673,15 +711,15 @@ init() {
   if [ -d "$TRACKEDHOOKS_DIR" ]; then
     if [ ! -e "$pathTracked" ]; then
       # Destination does not exist.
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
+      _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
     elif [ ! -h "$pathTracked" ]; then
       # Destination is a common file or directory, create backup then link.
       mv "$pathTracked" "$pathTracked~"
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
-    elif [ "`readlink -f $pathTracked`" != "$TRACKEDHOOKS_DIR" ]; then
+      _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
+    elif [ "`_wrapper readlink -f $pathTracked`" != "$TRACKEDHOOKS_DIR" ]; then
       # Destination is a wrong link, recreates, no backup.
       rm -f "$pathTracked"
-      ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
+      _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
     fi
   fi
   
@@ -718,7 +756,7 @@ destroy() {
     local hookPathLocalDefault="$hookPathLocalContainer/$hookName.$DEFAULT_EXTENSION"
     local hookPathTracked="$pathTracked/$hookName.d"
 
-    if [[ -h "$hookPathLocal" && "`readlink -f $hookPathLocal`" = "$triggerScript" ]]; then
+    if [[ -h "$hookPathLocal" && "`_wrapper readlink -f $hookPathLocal`" = "$triggerScript" ]]; then
       # Remove the symlink
       rm -f "$hookPathLocal"
 
@@ -749,7 +787,7 @@ destroy() {
   echo -e "${GREEN}Destroy: done!!!${NC}";
 }
 
-# Helper function used to check the git hooks structure has been initilized correctly.
+# Helper function used to check the git hooks structure has been initialized correctly.
 _check_init() {
   if ! _is_ready && _ask "Git hooks structure is not ready. Do you wanna init it?" Y ; then
     init
@@ -926,7 +964,8 @@ delete() {
   rm -f "$filePath"
 
   # Check the folder is now empty to remove it and perform a hook cleaning process.
-  [[ "$(ls -A $path)" ]] || {
+  # Special files as .DS_Store are not considered.
+  [[ "$(find $path -type f ! -name '.DS_Store')" ]] || {
     rm -rf "$path"
     _disable_hook $hookName 1
   }
