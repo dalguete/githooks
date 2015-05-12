@@ -9,6 +9,9 @@
 #
 # USAGE OPTIONS
 # -------------
+#  --help|-h
+#     General help.
+#
 #  [--status|-s [HOOKNAME FILENAME] [-ty]]
 #     Display the status of the current structure. This is the default.
 #
@@ -120,6 +123,7 @@ fi
 # Function used to print the usage message
 print_usage() {
   echo -e >&2 \
+"usage: $0 --help|-h"\
 "usage: $0 [--status|-s [HOOKNAME] [-ty]]\n"\
 "usage: $0 --init [-y]\n"\
 "usage: $0 --destroy [-y]\n"\
@@ -237,7 +241,7 @@ trap "rm -f /tmp/_git_hooks" EXIT SIGHUP SIGINT SIGTERM
 # because parameter expects arguments, and in the case of short options, parameters
 # are whatever is next to the options, with or without space separation.
 set +e
-TEMP=$(_wrapper getopt -o s::1:0:a:e:d:ty -l status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@")
+TEMP=$(_wrapper getopt -o hs::1:0:a:e:d:tyh -l help,status::,init,destroy,on::,off::,add::,edit::,delete::,do-add,do-edit -q -- "$@")
 retval=$?
 set -e
 
@@ -257,6 +261,10 @@ fi
 while [ $# -gt 0 ]
 do
   case "$1" in
+    -h|--help)  # General help.
+      _set_main_function "help"
+      ;;
+
     -s|--status)  # Display the status.
       _set_main_function "status"
       ;;
@@ -332,6 +340,13 @@ _check_conflicts() {
 
   # Check the function vs arguments passed.
   case "$MAIN_FUNCTION" in
+    help)
+      supported_flags=()
+      if [[ $args_count -ne 0 ]]; then
+        print_usage
+      fi
+      ;;
+
     status)
       supported_flags+=('from-trackedhooks-folder')
       if [[ $args_count -ne 0 && $args_count -ne 2 ]]; then
@@ -375,7 +390,6 @@ _check_conflicts() {
       ;;
 
     *)
-
       print_usage
       ;;
   esac
@@ -449,6 +463,11 @@ _ask() {
       N*|n*) return 1 ;;
     esac
   done
+}
+
+# Display the general help.
+help() {
+  print_usage
 }
 
 # Display the status of the current git hooks structure.
