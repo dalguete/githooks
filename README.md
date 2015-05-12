@@ -18,21 +18,22 @@ Next the reqs plus some installation guides:
 * **Homebrew**
 only for *OS X*.
 
-**Important for OS X** to mention there’s no need to install Homebrew packages with `--default-names` options, as the script internally deals with that, when available.
+**Important for OS X** to mention there’s no need to install Homebrew packages with
+`--default-names` options, as the script internally deals with that, when available.
 
 **NOTE:** Maybe there are some clever ways to overcome the OS differences, but it seems
 easier and in general good for the OS to have more up-to-date packages available. In any
 case, fixes are welcome.
 
 # INSTALL (it's quick)
-Clone this repo and store it in a folder named **.githooks** *(dot at the beggining)*
-next to *.git* folder, so *code* and *trackedhooks* can travel with your repo. Any
-other place works too, as long as that is inside the repo.
+Install it via composer, then create a link to the **githooks** script (inside bin/)
+to place coherent for your proyect or addapt your **$PATH** to include this new location.
+By default a folder named *trackedhooks* (living next to the *.git* dir) will be
+used as reference for the hooks that will travel with your repo. In case you want
+to set something different, be sure to adapt the external vars, as defined at the
+end of this doc.
 
-For convenience, **$PATH** in your local should be adapted to enable access the
-exec files (bin), here delivered.
-
-Run `githooks --init`, and enjoy.
+Then, run `githooks --init`, and enjoy.
 
 See below for more command options.
 
@@ -68,9 +69,9 @@ Can look a bit intimidating, but actually it's really simple.
   Files inside it will be called sequentially, using alphanumeric sort, so you
   state their execution order.
 
-* **trackedhooks/**: link that points to .githooks/ folder, to make them available
-  here. Inner structure must follow the one for "*hook names folder*.d/". Only
-  changes performed here are committable.
+* **trackedhooks/**: link that points to the folder with all the hooks that will
+  be tracked, to make them available here. Inner structure must follow the one for
+ "*hook names folder*.d/". Only changes performed here are committable.
 
 * **_.sh**: special file used to concentrate all git hooks activity. Remember
   all files in *hook files* are links to this one? Well, that's because this
@@ -131,8 +132,9 @@ an error and possible options.
 # EXPORTED VARIABLES
 There are some vars you can set to alter some settings. Those are:
 
-* **`TRACKEDHOOKS_FOLDERNAME`**. Used to change the name of the trackedhooks/ folder
-to something custom.
+* **`TRACKEDHOOKS_FOLDER`**. Used to set the path of the trackedhooks/ folder to
+something custom. It can specify deeper levels if you include '/' chars in the name.
+It's always refered in base to the main repo folder (the one that contains *.git* folder).
 
 * **`TRIGGERSCRIPT_FILENAME`**. Used to change the name of the generated triggering
 script.

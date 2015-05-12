@@ -87,7 +87,7 @@ _wrapper() {
 # Config vars, overrides are permitted.
 # That's the reason of the parameter expansion.
 # See that nice colon at the beginning, this is the reason http://stackoverflow.com/a/4892546
-: ${TRACKEDHOOKS_FOLDERNAME:="trackedhooks"}
+: ${TRACKEDHOOKS_FOLDER:="trackedhooks"}
 : ${TRIGGERSCRIPT_FILENAME:="_.sh"}
 : ${DEFAULT_EXTENSION:="00default"}
 : ${NO_COLORS:=0}
@@ -192,19 +192,20 @@ _is_ready() {
   [ -f "$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME" ]
 }
 
-# Helper function used to obtain the trackedhooks/ directory from the current position.
+# Helper function used to obtain the trackedhooks/ directory. Main repo folder is used
+# as base.
 _trackedhooks_dir() {
-  local cwd=`pwd`
+  local path="$GIT_DIR/../$TRACKEDHOOKS_FOLDER"
 
-  # The folder is expected to be one level above, that's why ../ is used.
-  if [ -d "$cwd/../$TRACKEDHOOKS_FOLDERNAME" ] ; then
-    # Returns a path with no ../ mention in it.
-    _wrapper readlink -f "$cwd/../$TRACKEDHOOKS_FOLDERNAME"
+  if [[ -d "$path" ]]; then
+    readlink -f "$path"
   fi
 }
 
 # Path to the trackedhooks directory
 TRACKEDHOOKS_DIR=$(_trackedhooks_dir)
+# Name of the trackedhooks directory
+TRACKEDHOOKS_NAME=`basename "$TRACKEDHOOKS_DIR"`
 
 # Helper function used to return a list with all available git hooks
 _git_hooks() {
@@ -472,7 +473,12 @@ _get_trigger_script() {
 hookName=\`basename \$0\`
 
 # Folders where to search for hooks
-declare -a FOLDERS=("." "$TRACKEDHOOKS_FOLDERNAME")
+declare -a FOLDERS=(".")
+
+# Add the trackedhooks folder if that exists
+if [[ -n "$TRACKEDHOOKS_NAME" ]]; then
+  FOLDERS+=("$TRACKEDHOOKS_NAME")
+fi
 
 # Helpers
 declare -A exitCodes
@@ -572,9 +578,15 @@ _enable_hook() {
 
   # Helpers
   local hookPathLocal="$GIT_DIR/hooks/$hookName"
-  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_NAME"
   local hookPathTracked="$pathTracked/$hookName.d"
   local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
+
+  # Clean trackedhooks vars info.
+  if [[ ! -d "$TRACKEDHOOKS_DIR" ]]; then
+    pathTracked=
+    hookPathTracked=
+  fi
 
   for place in "${where[@]}"; do
     case "$place" in
@@ -601,7 +613,7 @@ _enable_hook() {
 
       tracked)
          # Check there's a place to check for tracked hooks.
-        if [ ! -d "$pathTracked" ]; then
+        if [[ ! -d "$pathTracked" ]]; then
           continue;
         fi
 
@@ -693,8 +705,14 @@ _disable_hook() {
 
   # Helpers
   local hookPathLocal="$GIT_DIR/hooks/$hookName"
-  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_NAME"
   local hookPathTracked="$pathTracked/$hookName.d"
+
+  # Clean trackedhooks vars info.
+  if [[ ! -d "$TRACKEDHOOKS_DIR" ]]; then
+    pathTracked=
+    hookPathTracked=
+  fi
 
   if (( ! $check )) || [[ ! -d "$hookPathLocal.d" && ! -d "$hookPathTracked" ]]; then
     _remove_link_trigger_script $hookName
@@ -704,23 +722,28 @@ _disable_hook() {
 # Init the git hooks structure.
 init() {
   # Helpers
-  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_NAME"
   local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
+
+  # Clean trackedhooks vars info.
+  if [[ ! -d "$TRACKEDHOOKS_DIR" ]]; then
+    pathTracked=
+  fi
 
   # Creates/recreates the trigger script
   (_get_trigger_script) > "$triggerScript"
   chmod +x "$triggerScript"
 
   # Try to create a soft link for trackedhooks/ folder into .git/hooks, if origin exists.
-  if [ -d "$TRACKEDHOOKS_DIR" ]; then
-    if [ ! -e "$pathTracked" ]; then
+  if [[ -d "$TRACKEDHOOKS_DIR" ]]; then
+    if [[ ! -e "$pathTracked" ]]; then
       # Destination does not exist.
       _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
-    elif [ ! -h "$pathTracked" ]; then
+    elif [[ ! -h "$pathTracked" ]]; then
       # Destination is a common file or directory, create backup then link.
       mv "$pathTracked" "$pathTracked~"
       _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
-    elif [ "`_wrapper readlink -f $pathTracked`" != "$TRACKEDHOOKS_DIR" ]; then
+    elif [[ "`_wrapper readlink -f $pathTracked`" != "$TRACKEDHOOKS_DIR" ]]; then
       # Destination is a wrong link, recreates, no backup.
       rm -f "$pathTracked"
       _wrapper ln -sf --relative "$TRACKEDHOOKS_DIR" "$pathTracked"
@@ -749,8 +772,13 @@ destroy() {
   fi
 
   # Helpers
-  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_FOLDERNAME"
+  local pathTracked="$GIT_DIR/hooks/$TRACKEDHOOKS_NAME"
   local triggerScript="$GIT_DIR/hooks/$TRIGGERSCRIPT_FILENAME"
+
+  # Clean trackedhooks vars info.
+  if [[ ! -d "$TRACKEDHOOKS_DIR" ]]; then
+    pathTracked=
+  fi
 
   # Loop through all the symlinks that points to the trigger script.
   for hookName in $(_git_hooks); do
@@ -758,7 +786,6 @@ destroy() {
     local hookPathLocal="$GIT_DIR/hooks/$hookName"
     local hookPathLocalContainer="$hookPathLocal.d"
     local hookPathLocalDefault="$hookPathLocalContainer/$hookName.$DEFAULT_EXTENSION"
-    local hookPathTracked="$pathTracked/$hookName.d"
 
     if [[ -h "$hookPathLocal" && "`_wrapper readlink -f $hookPathLocal`" = "$triggerScript" ]]; then
       # Remove the symlink
@@ -776,11 +803,11 @@ destroy() {
   done
 
   # Remove the symlink that points to trackedhooks/ folder (if it exists).
-  if [ -h "$pathTracked" ]; then
+  if [[ -h "$pathTracked" ]]; then
     rm -f "$pathTracked"
 
     # Check for backup data, to restore them.
-    if [ -e "$pathTracked~" ]; then
+    if [[ -e "$pathTracked~" ]]; then
       mv "$pathTracked~" "$pathTracked"
     fi
   fi
@@ -918,12 +945,12 @@ edit() {
   local filePath="$path/$fileName"
 
   # Test if file exists and ask if create when not found.
-  if [ ! -f "$filePath" ] && _ask "Script '$fileName' does not exist for $where hook '$hookName'. Do you wanna create it?" Y; then
+  if [[ ! -f "$filePath" ]] && _ask "Script '$fileName' does not exist for $where hook '$hookName'. Do you wanna create it?" Y; then
     add
   fi
 
   # Open an editor to edit the file
-  if [ -f "$filePath" ]; then
+  if [[ -f "$filePath" ]]; then
     [[ `which editor` ]] && {
       editor "$filePath"
     } || {

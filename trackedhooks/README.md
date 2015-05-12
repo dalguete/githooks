@@ -1,3 +1,6 @@
+#EXAMPLE ONLY
+**This folder must not be used. Here only for demostrative purposes.**
+
 Create all your scripts inside hook named container folders, like described below:
 
 <pre><strong>
