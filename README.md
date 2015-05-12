@@ -27,7 +27,7 @@ case, fixes are welcome.
 
 # INSTALL (it's quick)
 Install it via composer, then create a link to the **githooks** script (inside bin/)
-to place coherent for your proyect or addapt your **$PATH** to include this new location.
+to a coherent place for your proyect or addapt your **$PATH** to include this new location.
 By default a folder named *trackedhooks* (living next to the *.git* dir) will be
 used as reference for the hooks that will travel with your repo. In case you want
 to set something different, be sure to adapt the external vars, as defined at the
