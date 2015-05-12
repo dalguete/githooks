@@ -198,7 +198,7 @@ _trackedhooks_dir() {
   local path="$GIT_DIR/../$TRACKEDHOOKS_FOLDER"
 
   if [[ -d "$path" ]]; then
-    readlink -f "$path"
+    _wrapper readlink -f "$path"
   fi
 }
 
