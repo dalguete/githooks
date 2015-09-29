@@ -31,8 +31,9 @@ case, fixes are welcome.
 # INSTALL (it's quick)
 Install it (via PPA or composer). If used PPA, you're done, enjoy.
 
-IF used composer, you'll have to create a link to the **githooks** script (inside bin/)
+If used composer, you'll have to create a link to the **githooks** script (inside bin/)
 to a coherent place for your proyect or addapt your **$PATH** to include this new location.
+**Important**, be cautious you don't have both version at the same time.
 
 By default a folder named *trackedhooks* (living next to the *.git* dir) will be
 used as reference for the hooks that will travel with your repo. In case you want
