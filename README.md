@@ -31,7 +31,7 @@ case, fixes are welcome.
 # INSTALL (it's quick)
 Install it (via PPA or composer). If used PPA, you're done, enjoy.
 
-If used composer, you'll have to create a link to the **githooks** script (inside bin/)
+If used composer, you'll have to create a link to the **githooks** script (inside usr/bin/)
 to a coherent place for your proyect or addapt your **$PATH** to include this new location.
 **Important**, be cautious you don't have both version at the same time.
 
