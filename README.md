@@ -153,3 +153,12 @@ in local when moved to the new location.
 
 * **`NO_COLORS`**. Used to deactivate colored messages.
 
+Ubuntu PPA
+==========
+
+You can find the package as a PPA here https://launchpad.net/~dalguete/+archive/ubuntu/githooks
+
+Sidenote: About My Experience Creating Deb Packages Plus Ubuntu's PPA
+---------------------------------------------------------------------
+
+http://dalguete.github.io/#about-my-experiences-creating-deb-packages-plus-ubuntus-ppa
