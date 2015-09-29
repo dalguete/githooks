@@ -4,8 +4,11 @@ chaining support and load of versioned hook files inside the repo. Your defined
 hooks will be preserved, but will live in a more appropriate place.
 
 # REQUIREMENTS
-In general in any modern GNU/Linux this will work, but for OS X some adjustments
-have to be made; all can be done by using Homebrew (tested in a system using that).
+In general in any modern GNU/Linux this will work, and even better, for Ubuntu there's
+a PPA available for you to install here (<https://launchpad.net/~dalguete/+archive/ubuntu/githooks>).
+
+For OS X, you'll need to get the composer package plus some adjustments to your system;
+all can be done by using Homebrew (tested in a system using that).
 Next the reqs plus some installation guides:
 * **Git (of course)**
 *OS X* - No problem by using the default git version.
@@ -26,14 +29,17 @@ easier and in general good for the OS to have more up-to-date packages available
 case, fixes are welcome.
 
 # INSTALL (it's quick)
-Install it via composer, then create a link to the **githooks** script (inside bin/)
+Install it (via PPA or composer). If used PPA, you're done, enjoy.
+
+IF used composer, you'll have to create a link to the **githooks** script (inside bin/)
 to a coherent place for your proyect or addapt your **$PATH** to include this new location.
+
 By default a folder named *trackedhooks* (living next to the *.git* dir) will be
 used as reference for the hooks that will travel with your repo. In case you want
 to set something different, be sure to adapt the external vars, as defined at the
 end of this doc.
 
-Then, run `githooks --init`, and enjoy.
+Then, run `githooks --init`, and enjoy (again :P).
 
 See below for more command options.
 
