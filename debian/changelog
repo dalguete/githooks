@@ -1,0 +1,5 @@
+githooks (1.0-0ubuntu1) vivid; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Daniel Dalgo <dalguete@gmail.com>  Tue, 29 Sep 2015 17:13:01 -0500

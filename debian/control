@@ -1,0 +1,16 @@
+Source: githooks
+Section: utils
+Priority: optional
+Maintainer: Daniel Dalgo <dalguete@gmail.com>
+Build-Depends: debhelper (>= 9)
+Standards-Version: 3.9.5
+Homepage: http://dalguete.com
+Vcs-Browser: https://github.com/dalguete/githooks.git
+
+Package: githooks
+Architecture: any
+Depends: bash, coreutils, util-linux
+Description: Git hooks handler
+ Utility used to enable some particular capabilities when using git hooks, as
+ chaining support and load of versioned hook files inside the repo. Your defined
+ hooks will be preserved, but will live in a more appropriate place.
