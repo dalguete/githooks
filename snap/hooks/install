@@ -1,39 +1,88 @@
 #!/bin/sh
 
-################################
-## 'bindfs' package checkings ##
-################################
+########################
+## 'Package checkings ##
+########################
 
-# Check bindfs package is installed in host.
-echo "Checking 'bindfs' package is available..."
-which bindfs
-ERROR_CODE=$?
+TO_INSTALL=
 
-if [ $ERROR_CODE = 0 ]; then
-  echo "'bindfs' package found!"
-  exit $ERROR_CODE
-fi
-
-# If not try to install it.
-echo "Package 'bindfs' not found. Trying installation..."
-apt-get update
-apt-get install -y bindfs
+# Check 'bash' package is installed in host.
+echo "Checking 'bash' package is available..."
+which bash
 ERROR_CODE=$?
 
 if [ $ERROR_CODE != 0 ]; then
-  echo "Package 'bindfs' could not be installed"
-  exit $ERROR_CODE
+  TO_INSTALL="$TO_INSTALL bash"
 fi
 
-# Tesf if package is already installed
-which bindfs
+# Check 'coreutils' package is installed in host.
+echo "Checking 'coreutils' package is available..."
+which readlink
 ERROR_CODE=$?
 
-if [ $ERROR_CODE = 0 ]; then
-  echo "'bindfs' package installed!"
+if [ $ERROR_CODE != 0 ]; then
+  TO_INSTALL="$TO_INSTALL coreutils"
+fi
+
+# Check 'util-linux' package is installed in host.
+echo "Checking 'util-linux' package is available..."
+which getopt
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  TO_INSTALL="$TO_INSTALL util-linux"
+fi
+
+############################
+## 'Package installations ##
+############################
+
+if [ -z "$TO_INSTALL" ]; then
+  echo "Ol Korrect :P"
+  exit
+fi
+
+# Updating packages.
+echo "Installing missing packages..."
+apt-get update
+apt-get install -y "$TO_INSTALL"
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  echo "Error in installation!" >&2
   exit $ERROR_CODE
 fi
 
-# If all fails, prevent installation.
-echo "'bindfs' not found."
-exit 1
+###########################
+## 'Package re-checkings ##
+###########################
+
+# Check 'bash' package is installed in host.
+echo "Checking 'bash' package is available..."
+which bash
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  echo "Package 'bash' still not available!" >&2
+  exit $ERROR_CODE
+fi
+
+# Check 'coreutils' package is installed in host.
+echo "Checking 'coreutils' package is available..."
+which readlink
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  echo "Package 'coreutils' still not available!" >&2
+  exit $ERROR_CODE
+fi
+
+# Check 'util-linux' package is installed in host.
+echo "Checking 'util-linux' package is available..."
+which getopt
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  echo "Package 'util-linux' still not available!" >&2
+  exit $ERROR_CODE
+fi
