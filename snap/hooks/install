@@ -33,6 +33,15 @@ if [ $ERROR_CODE != 0 ]; then
   TO_INSTALL="$TO_INSTALL util-linux"
 fi
 
+# Check 'git' package is installed in host.
+echo "Checking 'git' package is available..."
+which git
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  TO_INSTALL="$TO_INSTALL git"
+fi
+
 ############################
 ## 'Package installations ##
 ############################
@@ -84,5 +93,15 @@ ERROR_CODE=$?
 
 if [ $ERROR_CODE != 0 ]; then
   echo "Package 'util-linux' still not available!" >&2
+  exit $ERROR_CODE
+fi
+
+# Check 'git' package is installed in host.
+echo "Checking 'git' package is available..."
+which git
+ERROR_CODE=$?
+
+if [ $ERROR_CODE != 0 ]; then
+  echo "Package 'git' still not available!" >&2
   exit $ERROR_CODE
 fi
