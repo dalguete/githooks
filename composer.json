@@ -2,7 +2,7 @@
   "name": "dalguete/githooks",
   "description": "Tiny framework to help you working in your git hooks.",
   "keywords": ["git","hooks","chainable","tracked"],
-  "license": "GPL v3",
+  "license": "GPL-3.0-or-later",
   "authors": [
     {
       "name": "Daniel Dalgo",
