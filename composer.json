@@ -1,6 +1,6 @@
 {
   "name": "dalguete/githooks",
-  "description": "Modify the Git Hooks structure, to enable chain calls and external/tracked hook files",
+  "description": "Tiny framework to help you working in your git hooks.",
   "keywords": ["git","hooks","chainable","tracked"],
   "license": "GPL v3",
   "authors": [

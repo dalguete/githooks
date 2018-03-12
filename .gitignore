@@ -1,2 +1,7 @@
-### BZR ###
-.bzr/
+### Snapcraft ###
+# Snapcraft
+parts/
+prime/
+stage/
+*.snap
+*.bz2

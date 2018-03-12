@@ -1,0 +1,19 @@
+name: githooks
+version: '0.1'
+summary: Tiny framework to help you working in your git hooks.
+description: |
+  Utility used to enable some particular capabilities when using git hooks, as chaining
+  support and load of versioned hook files inside the repo. Your defined hooks will be
+  preserved, but will live in a more appropriate place.  
+
+grade: stable
+confinement: strict
+
+apps:
+  githooks:
+    command: usr/bin/githooks
+
+parts:
+  githooks:
+    plugin: dump
+    source: src/
