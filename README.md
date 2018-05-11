@@ -13,6 +13,7 @@ It's really simple, aimed to enable program distribution under different formats
 - ***src***: contains all the real code on the solution.
 - ***composer***: configurations to offer this package in composer.
 - ***snap***: configurations to create a snap package on the project.
+- ***Makefile***: configurations to install the package but using the ubiquitous make tool.
 
 ## REQUIREMENTS
 In general in any modern GNU/Linux, installing src files and folders in the correct place will be enough; even better, for Ubuntu there's a SNAP package available for you to install, just look for ***githooks*** in the snaps store..
@@ -117,6 +118,18 @@ There are some vars you can set to alter some settings. Those are:
 # Composer
 
 Check the "composer.json" file. That's used to publish this as a composer package in https://packagist.org/
+
+# Makefile
+
+Clone the project and, inside of it, run:
+
+```
+sudo make install
+```
+
+Done! For upgrades, simply clone the project again and run the previous command again.
+
+To remove simply run `sudo make uninstall`.
 
 # Snap Package
 
